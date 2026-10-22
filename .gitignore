@@ -1,0 +1,15 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.DS_Store
+
+# data bisnis & kunci rahasia impor
+*.xlsx
+*.xls
+*.csv
+import-report/
+.env.import
