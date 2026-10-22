@@ -7,6 +7,7 @@ import ProductsPage from './features/products/ProductsPage'
 import StockPage from './features/stock/StockPage'
 import StockMovePage from './features/stock-move/StockMovePage'
 import SettingsPage from './features/settings/SettingsPage'
+import UsersRolesPage from './features/users/UsersRolesPage'
 
 const Soon = ({ title }: { title: string }) => <div className="p-6 text-xl">{title} — segera hadir</div>
 
@@ -23,7 +24,7 @@ export default function App() {
           <Route path="/stok-move" element={<RequirePerm feature="stock_move"><StockMovePage /></RequirePerm>} />
           <Route path="/laporan" element={<RequirePerm feature="sales_recap"><Soon title="Rekap Penjualan" /></RequirePerm>} />
           <Route path="/keuangan" element={<RequirePerm feature="finance"><Soon title="Keuangan" /></RequirePerm>} />
-          <Route path="/pengguna" element={<RequirePerm feature="users"><Soon title="Pengguna & Role" /></RequirePerm>} />
+          <Route path="/pengguna" element={<RequirePerm feature="users"><UsersRolesPage /></RequirePerm>} />
           <Route path="/pengaturan" element={<RequirePerm feature="settings"><SettingsPage /></RequirePerm>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
