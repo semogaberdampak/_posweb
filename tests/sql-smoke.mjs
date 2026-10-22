@@ -73,3 +73,18 @@ console.log('gudang (cabang PUSAT) ke CAB1    :', await call(4, `select adjust_s
 console.log('gudang ke PUSAT (cabangnya)      :', await call(4, `select adjust_stock((select id from branches where code='PUSAT'),'${A}',1,'receive')`))
 console.log('stok A1 per cabang:', JSON.stringify(await q(`select b.code, s.qty from stock s join branches b on b.id=s.branch_id join products p on p.id=s.product_id where p.code='A1' order by 1`)), '(harus PUSAT 21, CAB1 12)')
 console.log('movements:', JSON.stringify(await q(`select reason, qty_change, note from stock_movements where reason in ('opname','receive') order by id`)))
+
+// ===== uji 005: transfer stok =====
+await run('005', sql('supabase/migrations/005_stock_movements.sql'));
+await run('005 ulang (idempoten)', sql('supabase/migrations/005_stock_movements.sql'));
+console.log('005 fitur terdaftar:', (await q(`select key from features where key='stock_move'`)).length, 'baris (harus 1)');
+// pengadaan (role 2, cabang PUSAT) mentransfer 3 A1 dari PUSAT ke CAB1
+console.log('transfer 3 A1 PUSAT->CAB1:', await call(2, `select transfer_stock((select id from branches where code='CAB1'),'${A}',3,'test transfer')`));
+console.log('stok A1 PUSAT setelah transfer:', (await q(`select qty from stock where branch_id=(select id from branches where code='PUSAT') and product_id='${A}'`))[0].qty, '(harus 18)');
+console.log('stok A1 CAB1 setelah transfer:', (await q(`select qty from stock where branch_id=(select id from branches where code='CAB1') and product_id='${A}'`))[0].qty, '(harus 15)');
+// kasir tidak boleh transfer (tidak punya stock.u)
+console.log('kasir transfer ditolak:', await call(1, `select transfer_stock((select id from branches where code='CAB1'),'${A}',1,'x')`));
+// stok tidak cukup
+console.log('transfer melebihi stok:', await call(2, `select transfer_stock((select id from branches where code='CAB1'),'${A}',999,'x')`));
+console.log('movements transfer:', JSON.stringify(await q(`select reason, qty_change from stock_movements where reason like 'transfer_%' order by id`)));
+
