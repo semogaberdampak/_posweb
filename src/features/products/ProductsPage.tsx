@@ -57,9 +57,9 @@ export default function ProductsPage() {
         )}
       </div>
 
-      <div className={`min-h-0 flex-1 overflow-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 ${isFetching ? 'opacity-80' : ''}`}>
+      <div className={`min-h-0 flex-1 overflow-auto rounded-2xl border border-border bg-bg ${isFetching ? 'opacity-80' : ''}`}>
         <table className="w-full text-left">
-          <thead className="sticky top-0 bg-slate-100 dark:bg-slate-900">
+          <thead className="sticky top-0 bg-bg-100">
             <tr>
               <th className="w-40 px-4 py-2">Kode produk</th><th className="px-4 py-2">Nama produk</th>
               <th className="w-36 px-4 py-2 text-right">Harga</th><th className="w-72 px-4 py-2">Pengarang</th>
@@ -68,19 +68,19 @@ export default function ProductsPage() {
           <tbody>
             {rows.map((p, i) => (
               <tr key={p.id} data-prow={i} onClick={() => setCursor(i)} onDoubleClick={() => setDetail(p)}
-                className={`cursor-pointer border-t border-slate-100 dark:border-slate-700 ${i === cursor ? 'bg-brand-100 dark:bg-brand-900/40' : 'hover:bg-slate-50 dark:hover:bg-slate-700/40'}`}>
-                <td className="px-4 py-2 font-mono">{p.code}</td>
-                <td className="px-4 py-2">{p.name}{!p.is_active && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Nonaktif</span>}</td>
-                <td className="px-4 py-2 text-right">{rupiah(p.price)}</td>
-                <td className="px-4 py-2 text-slate-600 dark:text-slate-300">{p.author ?? '-'}</td>
+                className={`cursor-pointer border-t border-border ${i === cursor ? 'bg-primary-600 text-white' : 'hover:bg-bg-100'}`}>
+                <td className={`px-4 py-2 font-mono ${i === cursor ? 'text-white' : ''}`}>{p.code}</td>
+                <td className={`px-4 py-2 ${i === cursor ? 'text-white' : ''}`}>{p.name}{!p.is_active && <span className="ml-2 rounded-full bg-warning-100 px-2 py-0.5 text-[11px] font-semibold text-warning-800 dark:text-warning-900">Nonaktif</span>}</td>
+                <td className={`px-4 py-2 text-right ${i === cursor ? 'text-white' : ''}`}>{rupiah(p.price)}</td>
+                <td className={`px-4 py-2 ${i === cursor ? 'text-white' : 'text-fg-200'}`}>{p.author ?? '-'}</td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500">{isError ? 'Gagal memuat produk.' : 'Tidak ada produk.'}</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={4} className="px-4 py-8 text-center text-fg-200">{isError ? 'Gagal memuat produk.' : 'Tidak ada produk.'}</td></tr>}
           </tbody>
         </table>
       </div>
 
-      <div className="flex items-center justify-between text-sm text-slate-500">
+      <div className="flex items-center justify-between text-sm text-fg-200">
         <span>↑↓ pilih · Enter / klik dua kali = detail · F2 cari</span>
         <div className="flex items-center gap-2">
           <button className="btn-ghost !py-1" disabled={page === 0} onClick={() => setPage((x) => x - 1)}>‹ Sebelumnya</button>

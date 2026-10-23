@@ -2,26 +2,155 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --color-brand-50: #f0fdf4;
-  --color-brand-100: #dcfce7;
-  --color-brand-400: #4ade80;
-  --color-brand-500: #22c55e;
-  --color-brand-600: #16a34a;
-  --color-brand-700: #15803d;
-  --color-brand-900: #14532d;
+  /* ===== Dark Mode (default) ===== */
+  --color-bg-dark: oklch(0.1 0.025 63);
+  --color-bg: oklch(0.15 0.025 63);
+  --color-bg-light: oklch(0.2 0.025 63);
+  --color-text: oklch(0.96 0.05 63);
+  --color-text-muted: oklch(0.76 0.05 63);
+  --color-highlight: oklch(0.5 0.05 63);
+  --color-border: oklch(0.4 0.05 63);
+  --color-border-muted: oklch(0.3 0.05 63);
+  --color-primary: oklch(0.76 0.1 63);
+  --color-secondary: oklch(0.76 0.1 243);
+  --color-danger: oklch(0.7 0.05 30);
+  --color-warning: oklch(0.7 0.05 100);
+  --color-success: oklch(0.7 0.05 160);
+  --color-info: oklch(0.7 0.05 260);
+
+  /* Color scales for Tailwind utilities */
+  --color-bg-50: var(--color-bg-dark);
+  --color-bg-100: var(--color-bg);
+  --color-bg-200: var(--color-bg-light);
+  --color-bg-300: var(--color-highlight);
+  --color-bg-400: var(--color-border);
+  --color-bg-500: var(--color-border-muted);
+  
+  --color-fg-50: var(--color-text);
+  --color-fg-100: var(--color-text);
+  --color-fg-200: var(--color-text-muted);
+  --color-fg-300: var(--color-text-muted);
+  --color-fg-400: var(--color-highlight);
+  --color-fg-500: var(--color-border);
+
+  --color-primary-50: oklch(0.95 0.02 63);
+  --color-primary-100: oklch(0.9 0.04 63);
+  --color-primary-200: oklch(0.8 0.07 63);
+  --color-primary-300: oklch(0.76 0.1 63);
+  --color-primary-400: oklch(0.72 0.12 63);
+  --color-primary-500: var(--color-primary);
+  --color-primary-600: oklch(0.65 0.12 63);
+  --color-primary-700: oklch(0.55 0.12 63);
+  --color-primary-800: oklch(0.45 0.1 63);
+  --color-primary-900: oklch(0.35 0.08 63);
+
+  --color-secondary-50: oklch(0.95 0.02 243);
+  --color-secondary-100: oklch(0.9 0.04 243);
+  --color-secondary-200: oklch(0.8 0.07 243);
+  --color-secondary-300: oklch(0.76 0.1 243);
+  --color-secondary-400: oklch(0.72 0.12 243);
+  --color-secondary-500: var(--color-secondary);
+  --color-secondary-600: oklch(0.65 0.12 243);
+  --color-secondary-700: oklch(0.55 0.12 243);
+  --color-secondary-800: oklch(0.45 0.1 243);
+  --color-secondary-900: oklch(0.35 0.08 243);
+
+  --color-danger-500: var(--color-danger);
+  --color-danger-600: oklch(0.6 0.05 30);
+  --color-warning-500: var(--color-warning);
+  --color-warning-600: oklch(0.6 0.05 100);
+  --color-success-500: var(--color-success);
+  --color-success-600: oklch(0.6 0.05 160);
+  --color-info-500: var(--color-info);
+  --color-info-600: oklch(0.6 0.05 260);
 }
 
-body { @apply bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100; }
+/* ===== Light Mode overrides ===== */
+:root:not(.dark) {
+  --color-bg-dark: oklch(0.98 0.005 63);
+  --color-bg: oklch(0.96 0.005 63);
+  --color-bg-light: oklch(0.93 0.005 63);
+  --color-text: oklch(0.15 0.025 63);
+  --color-text-muted: oklch(0.4 0.025 63);
+  --color-highlight: oklch(0.85 0.02 63);
+  --color-border: oklch(0.88 0.01 63);
+  --color-border-muted: oklch(0.9 0.01 63);
+
+  /* Primary/secondary adjusted for light bg */
+  --color-primary: oklch(0.55 0.12 63);
+  --color-secondary: oklch(0.55 0.12 243);
+  --color-danger: oklch(0.55 0.15 30);
+  --color-warning: oklch(0.65 0.1 100);
+  --color-success: oklch(0.5 0.1 160);
+  --color-info: oklch(0.55 0.1 260);
+
+  /* Light mode scales */
+  --color-bg-50: var(--color-bg-dark);
+  --color-bg-100: var(--color-bg);
+  --color-bg-200: var(--color-bg-light);
+  --color-bg-300: var(--color-highlight);
+  --color-bg-400: var(--color-border);
+  --color-bg-500: var(--color-border-muted);
+  
+  --color-fg-50: var(--color-text);
+  --color-fg-100: var(--color-text);
+  --color-fg-200: var(--color-text-muted);
+  --color-fg-300: var(--color-text-muted);
+  --color-fg-400: var(--color-highlight);
+  --color-fg-500: var(--color-border);
+
+  --color-primary-50: oklch(0.95 0.02 63);
+  --color-primary-100: oklch(0.9 0.04 63);
+  --color-primary-200: oklch(0.8 0.07 63);
+  --color-primary-300: oklch(0.7 0.1 63);
+  --color-primary-400: oklch(0.62 0.12 63);
+  --color-primary-500: var(--color-primary);
+  --color-primary-600: oklch(0.5 0.12 63);
+  --color-primary-700: oklch(0.42 0.1 63);
+  --color-primary-800: oklch(0.35 0.08 63);
+  --color-primary-900: oklch(0.28 0.06 63);
+
+  --color-secondary-50: oklch(0.95 0.02 243);
+  --color-secondary-100: oklch(0.9 0.04 243);
+  --color-secondary-200: oklch(0.8 0.07 243);
+  --color-secondary-300: oklch(0.7 0.1 243);
+  --color-secondary-400: oklch(0.62 0.12 243);
+  --color-secondary-500: var(--color-secondary);
+  --color-secondary-600: oklch(0.5 0.12 243);
+  --color-secondary-700: oklch(0.42 0.1 243);
+  --color-secondary-800: oklch(0.35 0.08 243);
+  --color-secondary-900: oklch(0.28 0.06 243);
+
+  --color-danger-500: var(--color-danger);
+  --color-danger-600: oklch(0.45 0.15 30);
+  --color-warning-500: var(--color-warning);
+  --color-warning-600: oklch(0.55 0.1 100);
+  --color-success-500: var(--color-success);
+  --color-success-600: oklch(0.4 0.1 160);
+  --color-info-500: var(--color-info);
+  --color-info-600: oklch(0.45 0.1 260);
+}
+
+/* Base styles */
+body {
+  @apply bg-bg text-fg-100;
+}
 
 @utility btn {
-  @apply rounded-full px-5 py-2 font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50;
+  @apply rounded-full px-5 py-2 font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:opacity-50;
 }
 @utility btn-primary {
-  @apply btn bg-brand-600 text-white hover:bg-brand-700;
+  @apply btn bg-primary-600 text-white hover:bg-primary-700;
 }
 @utility btn-ghost {
-  @apply btn bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600;
+  @apply btn bg-bg-200 hover:bg-bg-300;
 }
 @utility input {
-  @apply w-full rounded-full border border-slate-300 bg-white px-4 py-2 dark:border-slate-600 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500;
+  @apply w-full rounded-full border border-border bg-bg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500;
 }
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { @apply bg-bg; }
+::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+::-webkit-scrollbar-thumb:hover { @apply bg-border-muted; }

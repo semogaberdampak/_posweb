@@ -17,8 +17,8 @@ export function StockByBranch({ productId }: { productId?: string }) {
         const own = b.branch_id === profile?.branch_id
         return (
           <span key={b.branch_id}
-            className={`rounded-full px-3 py-1 text-sm ${own ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100'}`}>
-            {b.branch_name}{own ? ' (Anda)' : ''}: <b className={b.qty === 0 && !own ? 'text-red-600 dark:text-red-400' : ''}>{b.qty}</b>
+            className={`rounded-full px-3 py-1 text-sm ${own ? 'bg-primary-600 text-white' : 'bg-bg-200 text-fg-100'}`}>
+            {b.branch_name}{own ? ' (Anda)' : ''}: <b className={b.qty === 0 && !own ? 'text-red-600' : ''}>{b.qty}</b>
           </span>
         )
       })}

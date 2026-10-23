@@ -108,14 +108,14 @@ export default function StockMovePage() {
       {!sel ? (
         <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full text-left">
-            <thead className="sticky top-0 bg-slate-100 dark:bg-slate-900"><tr><th className="px-4 py-2">Kode</th><th className="px-4 py-2">Nama produk</th></tr></thead>
+            <thead className="sticky top-0 bg-bg-100 dark:bg-bg-200"><tr><th className="px-4 py-2">Kode</th><th className="px-4 py-2">Nama produk</th></tr></thead>
             <tbody>
               {products.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())).map((p, i) => (
-                <tr key={p.id} data-srow={i} className={"cursor-pointer border-b border-slate-100 dark:border-slate-700 " + (i===cursor?'bg-brand-100 dark:bg-brand-900/40':'') + " hover:bg-slate-50 dark:hover:bg-slate-700/40"} onClick={() => handleSelectProduct(p)}>
+                <tr key={p.id} data-srow={i} className={"cursor-pointer border-b border-border " + (i===cursor?'bg-primary-100 dark:bg-primary-900/20':'') + " hover:bg-bg-100 dark:hover:bg-bg-200"} onClick={() => handleSelectProduct(p)}>
                   <td className="font-mono px-4 py-2">{p.code}</td><td className="px-4 py-2">{p.name}</td>
                 </tr>
               ))}
-              {products.length===0 && <tr><td colSpan={2} className="px-4 py-8 text-center text-slate-500">Tidak ada produk aktif.</td></tr>}
+              {products.length===0 && <tr><td colSpan={2} className="px-4 py-8 text-center text-fg-200">Tidak ada produk aktif.</td></tr>}
             </tbody>
           </table>
         </div>
