@@ -27,7 +27,7 @@ Fitur baru = folder baru + 1 baris di tabel `features` (SQL) + 1 route di `App.t
 Kolom Excel: A kode, B nama, O harga, AK pengarang; kolom lain tersimpan di `attributes` dan tampil sebagai card.
 
 ## Urutan migrasi database
-`schema.sql` → `migrations/002_products_import.sql` → `003_costs_and_line_discount.sql` → `004_stock_views.sql`
+`schema.sql` → `migrations/002_products_import.sql` → `003_costs_and_line_discount.sql` → `004_stock_views.sql` → `005_user_permissions.sql`
 (003: harga beli dipindah ke tabel rahasia `product_costs`, dan diskon per produk).
 
 ## Stok awal dari Excel (kolom stokOnHand)
@@ -36,3 +36,9 @@ Hanya mengisi stok yang belum ada; stok yang sudah ada tidak diubah. `stokGudLai
 
 ## Untuk agen AI / pengembang lanjutan
 Baca `AGENTS.md` (konteks, keputusan, aturan keamanan, status). Uji SQL: `npm run test:sql`.
+
+## Stok awal per cabang
+`npm run import:stock -- stok_cabang.xlsx --branch=KODE --dry-run` lalu tanpa `--dry-run`. File: kolom `kode`, `jumlah` (hasil hitung fisik cabang itu).
+
+## Pengguna & hak akses
+Setelah migrasi 005, pasang Edge Function `supabase/functions/create-user` (lihat AGENTS.md §8). Superadmin mengatur hak di menu Pengguna & Role.

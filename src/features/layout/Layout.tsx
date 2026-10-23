@@ -7,7 +7,6 @@ const NAV: { to: string; label: string; feature: string; icon: LucideIcon }[] = 
   { to: '/pos', label: 'Kasir Penjualan', feature: 'pos', icon: ShoppingCart },
   { to: '/produk', label: 'Produk & Harga', feature: 'products', icon: Package },
   { to: '/stok', label: 'Stok & Pengadaan', feature: 'stock', icon: Boxes },
-  { to: '/stok-move', label: 'Mutasi Stok (PUSAT→Cabang)', feature: 'stock_move', icon: Boxes },
   { to: '/laporan', label: 'Rekap Penjualan', feature: 'sales_recap', icon: ClipboardCheck },
   { to: '/keuangan', label: 'Keuangan', feature: 'finance', icon: DollarSign },
   { to: '/pengguna', label: 'Pengguna & Role', feature: 'users', icon: ShieldCheck },

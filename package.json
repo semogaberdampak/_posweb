@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "import:products": "node scripts/import-products.mjs",
-    "test:sql": "node tests/sql-smoke.mjs"
+    "test:sql": "node tests/sql-smoke.mjs",
+    "import:stock": "node scripts/import-stock.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

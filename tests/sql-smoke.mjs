@@ -11,7 +11,7 @@ const db = new PGlite({ extensions: { pg_trgm } })
 const run = async (label, sql) => { try { await db.exec(sql); console.log('OK  ', label) } catch (e) { console.log('FAIL', label, '->', e.message); process.exit(1) } }
 await run('stub supabase', `
  create role anon nologin; create role authenticated nologin;
- create schema auth; create table auth.users(id uuid primary key);
+ create schema auth; create table auth.users(id uuid primary key, email text);
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true),'')::uuid $$;
  grant usage on schema public to anon, authenticated; grant usage on schema auth to authenticated;
  grant execute on function auth.uid() to anon, authenticated;`)
@@ -32,6 +32,8 @@ await run('003 ulang (idempoten)', sql('supabase/migrations/003_costs_and_line_d
 
 await run('004', sql('supabase/migrations/004_stock_views.sql'))
 await run('004 ulang', sql('supabase/migrations/004_stock_views.sql'))
+await run('005', sql('supabase/migrations/005_user_permissions.sql'))
+await run('005 ulang', sql('supabase/migrations/005_user_permissions.sql'))
 const q = async (sql) => (await db.query(sql)).rows
 console.log('A1 attributes setelah migrasi:', JSON.stringify((await q(`select attributes from products where code='A1'`))[0].attributes))
 console.log('costs A1:', JSON.stringify((await q(`select c.attributes from product_costs c join products p on p.id=c.product_id where p.code='A1'`))[0].attributes))
@@ -74,17 +76,24 @@ console.log('gudang ke PUSAT (cabangnya)      :', await call(4, `select adjust_s
 console.log('stok A1 per cabang:', JSON.stringify(await q(`select b.code, s.qty from stock s join branches b on b.id=s.branch_id join products p on p.id=s.product_id where p.code='A1' order by 1`)), '(harus PUSAT 21, CAB1 12)')
 console.log('movements:', JSON.stringify(await q(`select reason, qty_change, note from stock_movements where reason in ('opname','receive') order by id`)))
 
-// ===== uji 005: transfer stok =====
-await run('005', sql('supabase/migrations/005_stock_movements.sql'));
-await run('005 ulang (idempoten)', sql('supabase/migrations/005_stock_movements.sql'));
-console.log('005 fitur terdaftar:', (await q(`select key from features where key='stock_move'`)).length, 'baris (harus 1)');
-// pengadaan (role 2, cabang PUSAT) mentransfer 3 A1 dari PUSAT ke CAB1
-console.log('transfer 3 A1 PUSAT->CAB1:', await call(2, `select transfer_stock((select id from branches where code='CAB1'),'${A}',3,'test transfer')`));
-console.log('stok A1 PUSAT setelah transfer:', (await q(`select qty from stock where branch_id=(select id from branches where code='PUSAT') and product_id='${A}'`))[0].qty, '(harus 18)');
-console.log('stok A1 CAB1 setelah transfer:', (await q(`select qty from stock where branch_id=(select id from branches where code='CAB1') and product_id='${A}'`))[0].qty, '(harus 15)');
-// kasir tidak boleh transfer (tidak punya stock.u)
-console.log('kasir transfer ditolak:', await call(1, `select transfer_stock((select id from branches where code='CAB1'),'${A}',1,'x')`));
-// stok tidak cukup
-console.log('transfer melebihi stok:', await call(2, `select transfer_stock((select id from branches where code='CAB1'),'${A}',999,'x')`));
-console.log('movements transfer:', JSON.stringify(await q(`select reason, qty_change from stock_movements where reason like 'transfer_%' order by id`)));
-
+// ===== uji 005: hak granular =====
+await run('seed superadmin', `
+ insert into auth.users values ('00000000-0000-0000-0000-000000000005','sa@x.id');
+ insert into profiles(id,full_name,branch_id,role_id) select '00000000-0000-0000-0000-000000000005','Super',(select id from branches where code='PUSAT'),(select id from roles where name='superadmin');`)
+const U = (n) => `00000000-0000-0000-0000-00000000000${n}`
+const kasirRole = (await q(`select id from roles where name='kasir'`))[0].id, pusat = (await q(`select id from branches where code='PUSAT'`))[0].id
+const hp = async (n, f, a) => (await as(n, `select has_perm('${f}','${a}') as v`))[0].v
+console.log('kasir ubah hak role -> forbidden        :', await call(1, `select set_role_permission('${kasirRole}','products',false,true,false,false)`))
+console.log('superadmin beri kasir products.read     :', await call(5, `select set_role_permission('${kasirRole}','products',false,true,false,false)`), '| kasir has_perm products.r =', await hp(1,'products','r'))
+console.log('superadmin ubah role superadmin ditolak :', await call(5, `select set_role_permission((select id from roles where name='superadmin'),'pos',false,false,false,false)`))
+console.log('c/u/d tanpa read otomatis dapat read    :', await call(5, `select set_role_permission('${kasirRole}','members',true,false,false,false)`), '| members.r =', await hp(1,'members','r'))
+console.log('override kasir pos.create=false         :', await call(5, `select set_user_permission('${U(1)}','pos',false,null,null,null)`), '| kasir pos.c =', await hp(1,'pos','c'), '(harus false)')
+console.log('kasir jual saat dilarang                :', await sale(1,[{product_id:A,qty:1,discount_pct:0}],null,'qris'))
+console.log('hapus override (semua null)             :', await call(5, `select set_user_permission('${U(1)}','pos',null,null,null,null)`), '| kasir pos.c =', await hp(1,'pos','c'), '(harus true)')
+console.log('ubah hak diri sendiri ditolak           :', await call(5, `select set_user_permission('${U(5)}','pos',false,false,false,false)`))
+console.log('ganti role diri sendiri ditolak         :', await call(5, `select set_user_role('${U(5)}','${kasirRole}','${pusat}')`))
+console.log('pindah role kasir -> pengadaan          :', await call(5, `select set_user_role('${U(1)}',(select id from roles where name='pengadaan'),'${pusat}')`))
+console.log('nonaktifkan user -> has_perm false      :', await call(5, `select set_user_active('${U(1)}',false)`), '| pos.r =', await hp(1,'pos','r'), '(harus false)')
+console.log('tulis langsung role_permissions ditolak :', await call(5, `update role_permissions set can_delete=true`))
+console.log('list_users superadmin / kasir           :', (await as(5,'select * from list_users()')).length, '/', (await as(3,'select * from list_users()')).length, '(kedua bukan 0 / harus 0)')
+console.log('buat role baru oleh superadmin          :', await call(5, `select create_role('supervisor kasir','approve void',false)`), '| role sama lagi:', await call(5, `select create_role('supervisor kasir','x',false)`))
