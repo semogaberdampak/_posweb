@@ -4,6 +4,8 @@ import { Eye, EyeOff } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from './AuthProvider'
 
+const DOMAIN = 'takom.id' // username tanpa '@' otomatis menjadi <username>@takom.id
+const fullEmail = (v: string) => { const t = v.trim().toLowerCase(); return t.includes('@') ? t : `${t}@${DOMAIN}` }
 const KEY = 'last_email' // hanya email yang diingat, TIDAK PERNAH kata sandi
 const readEmail = () => { try { return localStorage.getItem(KEY) ?? '' } catch { return '' } }
 const writeEmail = (v: string | null) => { try { v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY) } catch { /* abaikan */ } }
@@ -24,20 +26,20 @@ export default function LoginPage() {
   async function submit(e: FormEvent) {
     e.preventDefault()
     setBusy(true); setErr('')
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+    const { error } = await supabase.auth.signInWithPassword({ email: fullEmail(email), password })
     setBusy(false)
     // pesan generik: jangan bocorkan apakah email terdaftar
     if (error) { setErr('Email atau kata sandi salah.'); return }
-    writeEmail(remember ? email.trim() : null)
+    writeEmail(remember ? fullEmail(email) : null)
     nav('/', { replace: true })
   }
 
   return (
     <div className="grid min-h-screen place-items-center p-4">
-      <form onSubmit={submit} className="w-full max-w-md space-y-4 rounded-3xl bg-bg p-8 shadow-lg">
+      <form onSubmit={submit} className="w-full max-w-md space-y-4 rounded-3xl bg-bg-light p-8 shadow-lg">
         <h1 className="text-center text-2xl font-semibold">Masuk</h1>
         <div className="flex items-center gap-3">
-          <input className="input flex-1" type="email" autoComplete="username" placeholder="Email" value={email}
+          <input className="input flex-1" type="text" inputMode="email" autoCapitalize="none" autoComplete="username" placeholder={`Username atau email (@${DOMAIN})`} value={email}
             onChange={(e) => setEmail(e.target.value)} required autoFocus={!saved} />
           <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-sm">
             <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
@@ -48,11 +50,11 @@ export default function LoginPage() {
           <input className="input !pr-12" type={show ? 'text' : 'password'} autoComplete="current-password" placeholder="Kata sandi"
             value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus={!!saved} />
           <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-fg-200 hover:text-fg-100">
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-text-muted hover:text-text">
             {show ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
           </button>
         </div>
-        {err && <p role="alert" className="text-sm text-red-500">{err}</p>}
+        {err && <p role="alert" className="text-sm text-danger">{err}</p>}
         <button className="btn-primary w-full" disabled={busy}>{busy ? 'Memproses…' : 'Masuk'}</button>
       </form>
     </div>

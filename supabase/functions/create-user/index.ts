@@ -6,7 +6,8 @@ const origin = Deno.env.get('ALLOWED_ORIGIN') ?? '*' // isi dengan alamat web ap
 const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' }
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const DOMAIN = (Deno.env.get('EMAIL_DOMAIN') ?? 'takom.id').toLowerCase() // samakan dengan migrasi 006
+const USERNAME = /^[a-z0-9._-]{2,40}$/
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
@@ -24,10 +25,11 @@ Deno.serve(async (req) => {
 
   let b: Record<string, unknown>
   try { b = await req.json() } catch { return json(400, { error: 'Data tidak valid' }) }
-  const full_name = String(b.full_name ?? '').trim(), email = String(b.email ?? '').trim().toLowerCase()
+  const full_name = String(b.full_name ?? '').trim(), username = String(b.username ?? '').trim().toLowerCase()
+  const email = `${username}@${DOMAIN}`
   const password = String(b.password ?? ''), role_id = String(b.role_id ?? ''), branch_id = String(b.branch_id ?? '')
   if (!full_name || full_name.length > 100) return json(400, { error: 'Nama wajib diisi (maks. 100 karakter)' })
-  if (!EMAIL.test(email) || email.length > 254) return json(400, { error: 'Email tidak valid' })
+  if (!USERNAME.test(username)) return json(400, { error: 'Username 2–40 karakter: huruf kecil, angka, titik, strip, garis bawah' })
   if (password.length < 12 || password.length > 72) return json(400, { error: 'Kata sandi 12–72 karakter' })
   if (!UUID.test(role_id) || !UUID.test(branch_id)) return json(400, { error: 'Role/cabang tidak valid' })
 

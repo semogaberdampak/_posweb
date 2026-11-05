@@ -1,14 +1,12 @@
 import { supabase } from '../../lib/supabase'
 
 export type UserRow = { id: string; email: string; full_name: string; branch_id: string | null; role_id: string | null; is_active: boolean }
-export type ProfileRow = UserRow & { branch_name?: string; role_name?: string }
 export type Role = { id: string; name: string; description: string | null; all_branches: boolean; is_system: boolean }
-export type RoleRow = Role
 export type Branch = { id: string; code: string; name: string }
 export type Feature = { key: string; label: string }
 export type RolePerm = { feature_key: string; can_create: boolean; can_read: boolean; can_update: boolean; can_delete: boolean }
-export type PermRow = RolePerm
 export type UserPerm = { feature_key: string; can_create: boolean | null; can_read: boolean | null; can_update: boolean | null; can_delete: boolean | null }
+export const EMAIL_DOMAIN = 'takom.id' // semua akun baru: <username>@takom.id (dijaga juga di DB: migrasi 006)
 export type Tri = boolean | null // null = ikut role
 
 const fail = (m: string): never => { throw new Error(m === 'forbidden' ? 'Anda tidak punya izin untuk tindakan ini.' : m || 'Gagal menyimpan.') }
@@ -42,44 +40,11 @@ export const setUserActive = (user: string, active: boolean) => rpc('set_user_ac
 export const createRole = (name: string, desc: string, allBranches: boolean) => rpc('create_role', { p_name: name, p_desc: desc, p_all_branches: allBranches })
 
 /** Membuat akun login butuh kunci rahasia, jadi dikerjakan Edge Function `create-user` (lihat supabase/functions). */
-export async function createUser(body: { full_name: string; email: string; password: string; role_id: string; branch_id: string }) {
+export async function createUser(body: { full_name: string; username: string; password: string; role_id: string; branch_id: string }) {
   const { error } = await supabase.functions.invoke('create-user', { body })
   if (error) {
     let m = 'Gagal membuat pengguna. Pastikan fungsi create-user sudah dipasang di Supabase.'
     try { const j = await (error as { context?: Response }).context?.json(); if (j?.error) m = j.error } catch { /* pakai pesan umum */ }
     throw new Error(m)
   }
-}
-
-export async function updateUser(id: string, changes: Partial<ProfileRow>) {
-  if (changes.is_active !== undefined) {
-    return setUserActive(id, changes.is_active)
-  }
-  // Perubahan properti lain belum tersedia via RPC
-  return { success: true }
-}
-
-export async function saveRole(role: { id?: string; name: string; description?: string | null; all_branches?: boolean }) {
-  if (role.id) {
-    // Update role belum ada RPC khusus; createRole dipakai untuk baru
-    return { success: true }
-  }
-  return createRole(role.name, role.description ?? '', role.all_branches ?? false)
-}
-
-export async function deleteRole(id: string) {
-  // Tidak ada RPC delete_role; role dianhargai dengan is_active=false melalui DB langsung.
-  // Fungsi ini disediakan agar kompilasi TypeScript lolos; implementasi RPC perlu ditambahkan di migrasi berikutnya.
-  throw new Error('Hapus role belum tersedia via RPC. Gunakan pengaturan di database langsung.')
-}
-
-export async function listRolePermissions(roleId: string): Promise<RolePerm[]> {
-  return rolePerms(roleId)
-}
-
-export async function saveRolePermissions(roleId: string, perms: Record<string, { can_create: boolean; can_read: boolean; can_update: boolean; can_delete: boolean }>) {
-  const promises = Object.entries(perms).map(([feature_key, p]) =>
-    setRolePerm(roleId, feature_key, p.can_create, p.can_read, p.can_update, p.can_delete)
-  )
-  return Promise.all(promises)
 }

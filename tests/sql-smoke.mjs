@@ -97,3 +97,14 @@ console.log('nonaktifkan user -> has_perm false      :', await call(5, `select s
 console.log('tulis langsung role_permissions ditolak :', await call(5, `update role_permissions set can_delete=true`))
 console.log('list_users superadmin / kasir           :', (await as(5,'select * from list_users()')).length, '/', (await as(3,'select * from list_users()')).length, '(kedua bukan 0 / harus 0)')
 console.log('buat role baru oleh superadmin          :', await call(5, `select create_role('supervisor kasir','approve void',false)`), '| role sama lagi:', await call(5, `select create_role('supervisor kasir','x',false)`))
+
+// ===== uji 006: domain email =====
+await run('006', sql('supabase/migrations/006_email_domain.sql'))
+await run('006 ulang', sql('supabase/migrations/006_email_domain.sql'))
+const ins = async (email) => { try { await db.exec(`insert into auth.users(id,email) values (gen_random_uuid(), ${email===null?'null':`'${email}'`})`); return 'DITERIMA' } catch (e) { return 'DITOLAK: ' + e.message } }
+console.log('siti@takom.id            :', await ins('siti@takom.id'))
+console.log('SITI.K@TAKOM.ID (kapital):', await ins('SITI.K@TAKOM.ID'))
+console.log('budi@gmail.com           :', await ins('budi@gmail.com'))
+console.log('x@takom.id.evil.com      :', await ins('x@takom.id.evil.com'))
+console.log('x@sub.takom.id           :', await ins('x@sub.takom.id'))
+console.log('tanpa email (null)       :', await ins(null))

@@ -50,7 +50,7 @@ export function ProductForm({ product, onClose }: { product: ProductRow | null; 
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Aktif (bisa dijual di kasir)
         </label>
-        {err && <p role="alert" className="text-sm text-red-500">{err}</p>}
+        {err && <p role="alert" className="text-sm text-danger">{err}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Batal</button>
           <button className="btn-primary" disabled={busy}>{busy ? 'Menyimpan…' : 'Simpan'}</button>

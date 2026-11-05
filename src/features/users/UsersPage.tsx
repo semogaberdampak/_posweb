@@ -51,34 +51,34 @@ export default function UsersPage() {
         {tab === 'users' && can('users', 'c') && <button className="btn-primary ml-auto flex items-center gap-1" onClick={() => setNewUser(true)}><Plus className="h-4 w-4" />Tambah pengguna</button>}
         {tab === 'roles' && can('roles', 'c') && <button className="btn-primary ml-auto flex items-center gap-1" onClick={() => setNewRole(true)}><Plus className="h-4 w-4" />Buat role</button>}
       </div>
-      {msg && <p role="alert" className="rounded-2xl bg-red-100 px-4 py-2 text-sm text-red-800 dark:bg-red-900/40 dark:text-red-100">{msg}</p>}
+      {msg && <p role="alert" className="rounded-2xl bg-danger/20 px-4 py-2 text-sm text-danger">{msg}</p>}
 
       {tab === 'users' && (
         <div className="grid min-h-0 flex-1 grid-cols-[22rem_1fr] gap-4">
-          <div className="overflow-auto rounded-2xl border border-border bg-bg dark:border-border dark:bg-bg-200">
+          <div className="overflow-auto rounded-2xl border border-border-muted bg-bg-light">
             {(users.data ?? []).map((u) => (
-              <button key={u.id} onClick={() => setUserId(u.id)} className={`block w-full border-b border-border px-4 py-2 text-left dark:border-border ${u.id === userId ? 'bg-primary-100 dark:bg-primary-900/20' : 'hover:bg-bg-100 dark:hover:bg-bg-300'}`}>
-                <div className="font-medium">{u.full_name}{!u.is_active && <span className="ml-2 rounded-full bg-warning-100 px-2 text-[11px] text-warning-800 dark:text-warning-900">Nonaktif</span>}</div>
-                <div className="truncate text-xs text-fg-200">{u.email} · {roleName(u.role_id)} · {branchName(u.branch_id)}</div>
+              <button key={u.id} onClick={() => setUserId(u.id)} className={`block w-full border-b border-border-muted px-4 py-2 text-left ${u.id === userId ? 'bg-primary/20' : 'hover:bg-highlight/25'}`}>
+                <div className="font-medium">{u.full_name}{!u.is_active && <span className="ml-2 rounded-full bg-warning/20 px-2 text-[11px] text-warning">Nonaktif</span>}</div>
+                <div className="truncate text-xs text-text-muted">{u.email} · {roleName(u.role_id)} · {branchName(u.branch_id)}</div>
               </button>
             ))}
-            {users.data?.length === 0 && <p className="p-4 text-fg-200">Belum ada pengguna.</p>}
+            {users.data?.length === 0 && <p className="p-4 text-text-muted">Belum ada pengguna.</p>}
           </div>
-          <div className="min-h-0 space-y-4 overflow-auto rounded-2xl bg-bg p-4 shadow dark:bg-bg-200">
-            {!user ? <p className="text-fg-200">Pilih pengguna di kiri.</p> : (
+          <div className="min-h-0 space-y-4 overflow-auto rounded-2xl bg-bg-light p-4 shadow">
+            {!user ? <p className="text-text-muted">Pilih pengguna di kiri.</p> : (
               <>
                 <div className="flex flex-wrap items-end gap-3">
-                  <div className="mr-auto"><div className="text-lg font-semibold">{user.full_name}</div><div className="text-sm text-fg-200">{user.email}</div></div>
+                  <div className="mr-auto"><div className="text-lg font-semibold">{user.full_name}</div><div className="text-sm text-text-muted">{user.email}</div></div>
                   <label className="text-sm">Role<select className="input mt-1" disabled={lockedUser} value={user.role_id ?? ''} onChange={(e) => run(() => api.setUserRole(user.id, e.target.value, user.branch_id!), [['users']])}>
                     {(roles.data ?? []).filter((r) => r.name !== 'superadmin' || r.id === user.role_id).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
                   <label className="text-sm">Cabang<select className="input mt-1" disabled={lockedUser} value={user.branch_id ?? ''} onChange={(e) => run(() => api.setUserRole(user.id, user.role_id!, e.target.value), [['users']])}>
                     {(branches.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
                   <button className="btn-ghost" disabled={lockedUser} onClick={() => run(() => api.setUserActive(user.id, !user.is_active), [['users']])}>{user.is_active ? 'Nonaktifkan' : 'Aktifkan'}</button>
                 </div>
-                {lockedUser && <p className="text-sm text-fg-200">Akun Anda sendiri dan akun superadmin tidak bisa diubah dari sini (pengaman agar tidak terkunci).</p>}
+                {lockedUser && <p className="text-sm text-text-muted">Akun Anda sendiri dan akun superadmin tidak bisa diubah dari sini (pengaman agar tidak terkunci).</p>}
                 <div>
                   <h3 className="mb-1 font-semibold">Hak khusus untuk pengguna ini</h3>
-                  <p className="mb-2 text-sm text-fg-200">Biarkan "Ikut role" bila tidak ada pengecualian. Pilihan "Ya"/"Tidak" menimpa hak dari role {roleName(user.role_id)}. Tersimpan langsung.</p>
+                  <p className="mb-2 text-sm text-text-muted">Biarkan "Ikut role" bila tidak ada pengecualian. Pilihan "Ya"/"Tidak" menimpa hak dari role {roleName(user.role_id)}. Tersimpan langsung.</p>
                   <PermMatrix features={features.data ?? []} disabled={lockedUser}
                     value={(f) => fromUser(up.data?.find((x) => x.feature_key === f))}
                     inherited={(f) => fromRole(urp.data?.find((x) => x.feature_key === f))}
@@ -92,18 +92,18 @@ export default function UsersPage() {
 
       {tab === 'roles' && (
         <div className="grid min-h-0 flex-1 grid-cols-[18rem_1fr] gap-4">
-          <div className="overflow-auto rounded-2xl border border-border bg-bg dark:border-border dark:bg-bg-200">
+          <div className="overflow-auto rounded-2xl border border-border-muted bg-bg-light">
             {(roles.data ?? []).map((r) => (
-              <button key={r.id} onClick={() => setRoleId(r.id)} className={`block w-full border-b border-border px-4 py-2 text-left dark:border-border ${r.id === roleId ? 'bg-primary-100 dark:bg-primary-900/20' : 'hover:bg-bg-100 dark:hover:bg-bg-300'}`}>
-                <div className="font-medium capitalize">{r.name}</div><div className="truncate text-xs text-fg-200">{r.description ?? ''}{r.all_branches ? ' · semua cabang' : ' · cabang sendiri'}</div>
+              <button key={r.id} onClick={() => setRoleId(r.id)} className={`block w-full border-b border-border-muted px-4 py-2 text-left ${r.id === roleId ? 'bg-primary/20' : 'hover:bg-highlight/25'}`}>
+                <div className="font-medium capitalize">{r.name}</div><div className="truncate text-xs text-text-muted">{r.description ?? ''}{r.all_branches ? ' · semua cabang' : ' · cabang sendiri'}</div>
               </button>
             ))}
           </div>
-          <div className="min-h-0 space-y-3 overflow-auto rounded-2xl bg-bg p-4 shadow dark:bg-bg-200">
-            {!role ? <p className="text-fg-200">Pilih role di kiri.</p> : (
+          <div className="min-h-0 space-y-3 overflow-auto rounded-2xl bg-bg-light p-4 shadow">
+            {!role ? <p className="text-text-muted">Pilih role di kiri.</p> : (
               <>
                 <h3 className="text-lg font-semibold capitalize">{role.name}</h3>
-                <p className="text-sm text-fg-200">{isSuper(role) ? 'Hak superadmin tetap penuh dan tidak bisa diubah.' : 'Perubahan tersimpan langsung. Fitur baru otomatis muncul di daftar ini. Mencentang Tambah/Ubah/Hapus otomatis mencentang Lihat.'}</p>
+                <p className="text-sm text-text-muted">{isSuper(role) ? 'Hak superadmin tetap penuh dan tidak bisa diubah.' : 'Perubahan tersimpan langsung. Fitur baru otomatis muncul di daftar ini. Mencentang Tambah/Ubah/Hapus otomatis mencentang Lihat.'}</p>
                 <PermMatrix features={features.data ?? []} disabled={isSuper(role) || !can('roles', 'u')}
                   value={(f) => fromRole(rp.data?.find((x) => x.feature_key === f))}
                   onChange={(f, n) => run(() => api.setRolePerm(role.id, f, !!n.c, !!n.r, !!n.u, !!n.d), [['role-perms', roleId]])} />
@@ -127,8 +127,8 @@ function NewRoleModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
         <input className="input" placeholder="Nama role (huruf kecil)" value={name} onChange={(e) => setName(e.target.value)} maxLength={30} autoFocus />
         <input className="input" placeholder="Keterangan (opsional)" value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={200} />
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Boleh melihat semua cabang (hanya superadmin yang bisa memberi)</label>
-        <p className="text-sm text-fg-200">Hak awal role baru kosong; atur lewat matriks setelah dibuat.</p>
-        {err && <p role="alert" className="text-sm text-red-500">{err}</p>}
+        <p className="text-sm text-text-muted">Hak awal role baru kosong; atur lewat matriks setelah dibuat.</p>
+        {err && <p role="alert" className="text-sm text-danger">{err}</p>}
         <div className="flex justify-end gap-2"><button className="btn-ghost" onClick={onClose}>Batal</button>
           <button className="btn-primary" onClick={async () => { try { await api.createRole(name, desc, all); onDone(); onClose() } catch (e) { setErr(e instanceof Error ? e.message : 'Gagal.') } }}>Buat role</button></div>
       </div>

@@ -41,33 +41,33 @@ export default function StockPage() {
       <section className="flex min-h-0 flex-col gap-3">
         <h1 className="text-xl font-semibold">Stok & Pengadaan</h1>
         <input ref={searchRef} className="input" placeholder="Cari kode / nama / pengarang (F2)" value={q} onChange={(e) => setQ(e.target.value)} maxLength={60} />
-        <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-border bg-bg">
+        <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-border-muted bg-bg-light">
           <table className="w-full text-left">
-            <thead className="sticky top-0 bg-bg-100"><tr><th className="w-40 px-4 py-2">Kode produk</th><th className="px-4 py-2">Nama produk</th></tr></thead>
+            <thead className="sticky top-0 bg-bg-dark"><tr><th className="w-40 px-4 py-2">Kode produk</th><th className="px-4 py-2">Nama produk</th></tr></thead>
             <tbody>
               {rows.map((p, i) => (
                 <tr key={p.id} data-srow={i} onClick={() => { setCursor(i); setSel(p) }}
-                  className={`cursor-pointer border-t border-border ${sel?.id === p.id ? 'bg-primary-100' : i === cursor ? 'bg-bg-100' : 'hover:bg-bg-100'}`}>
+                  className={`cursor-pointer border-t border-border-muted ${sel?.id === p.id ? 'bg-primary/20' : i === cursor ? 'bg-bg-dark' : 'hover:bg-highlight/25'}`}>
                   <td className="px-4 py-2 font-mono">{p.code}</td><td className="px-4 py-2">{p.name}</td>
                 </tr>
               ))}
-              {rows.length === 0 && <tr><td colSpan={2} className="px-4 py-8 text-center text-fg-200">Tidak ada produk.</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={2} className="px-4 py-8 text-center text-text-muted">Tidak ada produk.</td></tr>}
             </tbody>
           </table>
         </div>
-        <p className="text-sm text-fg-200">↑↓ pilih · Enter / klik = lihat stok · F2 cari</p>
+        <p className="text-sm text-text-muted">↑↓ pilih · Enter / klik = lihat stok · F2 cari</p>
       </section>
 
-      <aside className="flex min-h-0 flex-col gap-3 overflow-auto rounded-2xl bg-bg p-4 shadow">
-        {!sel ? <p className="text-fg-200">Pilih produk di kiri untuk melihat stok tiap cabang.</p> : (
+      <aside className="flex min-h-0 flex-col gap-3 overflow-auto rounded-2xl bg-bg-light p-4 shadow">
+        {!sel ? <p className="text-text-muted">Pilih produk di kiri untuk melihat stok tiap cabang.</p> : (
           <>
-            <div><div className="font-semibold">{sel.name}</div><div className="font-mono text-sm text-fg-200">{sel.code}</div></div>
+            <div><div className="font-semibold">{sel.name}</div><div className="font-mono text-sm text-text-muted">{sel.code}</div></div>
             <div className={`space-y-2 ${isFetching ? 'opacity-70' : ''}`}>
               {stocks.map((b) => (
-                <div key={b.branch_id} className={`flex items-center gap-2 rounded-2xl border p-3 ${b.branch_id === profile?.branch_id ? 'border-primary-500' : 'border-border'}`}>
+                <div key={b.branch_id} className={`flex items-center gap-2 rounded-2xl border p-3 ${b.branch_id === profile?.branch_id ? 'border-primary' : 'border-border-muted'}`}>
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">{b.branch_name}{b.branch_id === profile?.branch_id ? ' (Anda)' : ''}</div>
-                    <div className="text-sm text-fg-200">Stok: <b className="text-fg-100">{b.qty}</b></div>
+                    <div className="text-sm text-text-muted">Stok: <b className="text-text">{b.qty}</b></div>
                   </div>
                   {canEdit && <>
                     <button className="btn-ghost !px-3 !py-1 text-sm" onClick={() => setEdit({ mode: 'in', branch: b, productId: sel.id, productName: sel.name })}>+ Masuk</button>

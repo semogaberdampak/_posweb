@@ -14,15 +14,15 @@ type Props = {
 /** Mode role: kotak centang. Mode user (ada `inherited`): pilihan "Ikut role / Ya / Tidak". */
 export function PermMatrix({ features, value, inherited, onChange, disabled }: Props) {
   return (
-    <div className="overflow-auto rounded-2xl border border-slate-200 dark:border-slate-700">
+    <div className="overflow-auto rounded-2xl border border-border-muted">
       <table className="w-full text-left text-sm">
-        <thead className="bg-slate-100 dark:bg-slate-900"><tr><th className="px-3 py-2">Fitur</th>{ACTS.map((a) => <th key={a.k} className="px-3 py-2 text-center">{a.label}</th>)}</tr></thead>
+        <thead className="bg-bg-dark"><tr><th className="px-3 py-2">Fitur</th>{ACTS.map((a) => <th key={a.k} className="px-3 py-2 text-center">{a.label}</th>)}</tr></thead>
         <tbody>
           {features.map((f) => {
             const v = value(f.key); const inh = inherited?.(f.key)
             return (
-              <tr key={f.key} className="border-t border-slate-100 dark:border-slate-700">
-                <td className="px-3 py-2">{f.label}<div className="font-mono text-[11px] text-slate-500">{f.key}</div></td>
+              <tr key={f.key} className="border-t border-border-muted">
+                <td className="px-3 py-2">{f.label}<div className="font-mono text-[11px] text-text-muted">{f.key}</div></td>
                 {ACTS.map(({ k, label }) => (
                   <td key={k} className="px-3 py-2 text-center">
                     {inherited ? (

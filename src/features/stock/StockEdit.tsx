@@ -28,7 +28,7 @@ export function StockEdit({ t, onClose }: { t: EditTarget; onClose: () => void }
   return (
     <Modal title={t.mode === 'in' ? 'Barang masuk' : 'Stok aktual (hasil hitung)'} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
-        <p className="text-sm text-slate-600 dark:text-slate-300">{t.productName}<br />Cabang: <b>{t.branch.branch_name}</b> · stok sekarang: <b>{t.branch.qty}</b></p>
+        <p className="text-sm text-text-muted">{t.productName}<br />Cabang: <b>{t.branch.branch_name}</b> · stok sekarang: <b>{t.branch.qty}</b></p>
         <label className="block text-sm">{t.mode === 'in' ? 'Jumlah barang masuk' : 'Jumlah stok aktual'}
           <input className="input mt-1" inputMode="numeric" value={val} autoFocus onChange={(e) => setVal(e.target.value.replace(/\D/g, ''))} />
         </label>
@@ -37,7 +37,7 @@ export function StockEdit({ t, onClose }: { t: EditTarget; onClose: () => void }
             <input className="input mt-1" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="mis. stok opname Oktober" />
           </label>
         )}
-        {err && <p role="alert" className="text-sm text-red-500">{err}</p>}
+        {err && <p role="alert" className="text-sm text-danger">{err}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Batal</button>
           <button className="btn-primary" disabled={busy}>{busy ? 'Menyimpan…' : 'Simpan'}</button>

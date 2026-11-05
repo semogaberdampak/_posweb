@@ -140,48 +140,48 @@ export default function PosPage() {
         {/* ---- kiri: daftar produk (baris, bukan kartu) ---- */}
         <section className="flex min-h-0 flex-col gap-3">
           {done && (
-            <div className="rounded-2xl bg-success-100 px-4 py-2 text-success-900 dark:bg-success-900/40 dark:text-success-100">
+            <div className="rounded-2xl bg-success/20 px-4 py-2 text-success">
               {done.sale.invoice_no} tersimpan · Total {rupiah(done.sale.total)}
               {done.method === 'cash' && <b> · Kembalian {rupiah(done.sale.change)}</b>}
             </div>
           )}
           <input ref={searchRef} className="input" placeholder="Scan barcode / cari kode atau nama produk (F2)" value={q}
             onChange={(e) => { setQ(e.target.value); setNotice('') }} maxLength={60} />
-          {notice && <p role="status" className="px-2 text-sm text-warning-600 dark:text-warning-400">{notice}</p>}
-          <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-border">
+          {notice && <p role="status" className="px-2 text-sm text-warning">{notice}</p>}
+          <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-border-muted">
             <table className="w-full text-left">
-              <thead className="sticky top-0 bg-bg-100">
+              <thead className="sticky top-0 bg-bg-dark">
                 <tr><th className="w-40 px-4 py-2">Kode produk</th><th className="px-4 py-2">Nama produk</th><th className="w-40 px-4 py-2 text-right">Harga</th></tr>
               </thead>
               <tbody>
                 {products.map((p, i) => (
                   <tr key={p.id} data-row={i} onClick={() => { setCursor(i); add(p) }}
-                    className={`cursor-pointer border-t border-border ${i === cursor ? 'bg-primary-600 text-white' : 'hover:bg-bg-100'}`}>
-                    <td className={`px-4 py-2 font-mono ${i === cursor ? 'text-white' : ''}`}>{p.code}</td>
-                    <td className={`px-4 py-2 ${i === cursor ? 'text-white' : ''}`}>{p.name}</td>
+                    className={`cursor-pointer border-t border-border-muted ${i === cursor ? 'bg-primary/20' : 'hover:bg-highlight/25'}`}>
+                    <td className="px-4 py-2 font-mono">{p.code}</td>
+                    <td className="px-4 py-2">{p.name}</td>
                     <td className="px-4 py-2 text-right">{rupiah(p.price)}</td>
                   </tr>
                 ))}
-                {products.length === 0 && <tr><td colSpan={3} className="px-4 py-6 text-center text-fg-200">Tidak ada produk</td></tr>}
+                {products.length === 0 && <tr><td colSpan={3} className="px-4 py-6 text-center text-text-muted">Tidak ada produk</td></tr>}
               </tbody>
             </table>
           </div>
           {products[cursor] && (
-            <div className="space-y-1 rounded-2xl bg-bg p-4 shadow-sm">
-              <div className="truncate text-sm text-fg-200">Stok: {products[cursor].name}</div>
+            <div className="space-y-1 rounded-2xl bg-bg-light px-4 py-2 shadow-sm">
+              <div className="truncate text-sm text-text-muted">Stok: {products[cursor].name}</div>
               <StockByBranch productId={products[cursor].id} />
             </div>
           )}
-          <p className="text-sm text-fg-200">↑↓ pilih · Enter tambah · F8 pembayaran · Esc kembali</p>
+          <p className="text-sm text-text-muted">↑↓ pilih · Enter tambah · F8 pembayaran · Esc kembali</p>
         </section>
 
         {/* ---- kanan: keranjang + langkah ---- */}
-        <aside className="flex min-h-0 flex-col gap-3 rounded-2xl bg-bg p-4 shadow">
+        <aside className="flex min-h-0 flex-col gap-3 rounded-2xl bg-bg-light p-4 shadow">
           <div className="min-h-0 flex-1 space-y-3 overflow-auto">
             {cart.map((l) => (
               <div key={l.id} className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1"><div className="truncate">{l.name}</div><div className="text-sm text-fg-200">{rupiah(l.price)}</div></div>
+                  <div className="min-w-0 flex-1"><div className="truncate">{l.name}</div><div className="text-sm text-text-muted">{rupiah(l.price)}</div></div>
                   <button className="btn-ghost !px-3 !py-0" onClick={() => changeQty(l.id, -1)} disabled={step === 'payment'}>−</button>
                   <span className="w-8 text-center">{l.qty}</span>
                   <button className="btn-ghost !px-3 !py-0" onClick={() => changeQty(l.id, 1)} disabled={step === 'payment'}>+</button>
@@ -195,14 +195,14 @@ export default function PosPage() {
                   </label>
                 )}
                 {step !== 'discount' && eff(l) > 0 && (
-                  <div className="text-right text-sm text-primary-400">Diskon {eff(l)}% −{rupiah(lineDisc(l))}</div>
+                  <div className="text-right text-sm text-primary">Diskon {eff(l)}% −{rupiah(lineDisc(l))}</div>
                 )}
               </div>
             ))}
-            {cart.length === 0 && <p className="text-fg-200">Keranjang kosong</p>}
+            {cart.length === 0 && <p className="text-text-muted">Keranjang kosong</p>}
           </div>
 
-          <div className="space-y-1 border-t border-border pt-3">
+          <div className="space-y-1 border-t border-border-muted pt-3">
             <Line k="Subtotal" v={rupiah(subtotal)} />
             {discAmt > 0 && <Line k="Diskon" v={'-' + rupiah(discAmt)} />}
             <Line k="Total" v={rupiah(total)} big />
@@ -253,7 +253,7 @@ export default function PosPage() {
               )}
             </div>
           )}
-          {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
+          {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         </aside>
       </div>
       {done && <Receipt {...done} />}
