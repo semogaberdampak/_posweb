@@ -5,13 +5,14 @@ import { useAuth } from '../auth/AuthProvider'
 import { Modal } from '../../shared/Modal'
 import { PermMatrix, type Cell } from './PermMatrix'
 import { NewUserModal } from './NewUserModal'
+import { ResetPasswordModal } from './ResetPasswordModal'
 import * as api from './api'
 
 const fromRole = (p?: api.RolePerm): Cell => ({ c: !!p?.can_create, r: !!p?.can_read, u: !!p?.can_update, d: !!p?.can_delete })
 const fromUser = (p?: api.UserPerm): Cell => ({ c: p?.can_create ?? null, r: p?.can_read ?? null, u: p?.can_update ?? null, d: p?.can_delete ?? null })
 
 export default function UsersPage() {
-  const { can, session } = useAuth()
+  const { can, session, profile } = useAuth()
   const qc = useQueryClient()
   const [tab, setTab] = useState<'users' | 'roles'>('users')
   const [userId, setUserId] = useState<string | null>(null)
@@ -19,6 +20,8 @@ export default function UsersPage() {
   const [msg, setMsg] = useState('')
   const [newUser, setNewUser] = useState(false)
   const [newRole, setNewRole] = useState(false)
+  const [reset, setReset] = useState<api.UserRow | null>(null)
+  const isSuperAdmin = profile?.role_name === 'superadmin' // hanya tampilan; penegakan di Edge Function
 
   const users = useQuery({ queryKey: ['users'], queryFn: api.listUsers })
   const roles = useQuery({ queryKey: ['roles'], queryFn: api.listRoles })
@@ -74,6 +77,7 @@ export default function UsersPage() {
                   <label className="text-sm">Cabang<select className="input mt-1" disabled={lockedUser} value={user.branch_id ?? ''} onChange={(e) => run(() => api.setUserRole(user.id, user.role_id!, e.target.value), [['users']])}>
                     {(branches.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
                   <button className="btn-ghost" disabled={lockedUser} onClick={() => run(() => api.setUserActive(user.id, !user.is_active), [['users']])}>{user.is_active ? 'Nonaktifkan' : 'Aktifkan'}</button>
+                  {isSuperAdmin && <button className="btn-ghost" onClick={() => setReset(user)}>Reset kata sandi</button>}
                 </div>
                 {lockedUser && <p className="text-sm text-text-muted">Akun Anda sendiri dan akun superadmin tidak bisa diubah dari sini (pengaman agar tidak terkunci).</p>}
                 <div>
@@ -113,6 +117,7 @@ export default function UsersPage() {
         </div>
       )}
 
+      {reset && <ResetPasswordModal user={reset} onClose={() => setReset(null)} />}
       {newUser && roles.data && branches.data && <NewUserModal roles={roles.data} branches={branches.data} onClose={() => setNewUser(false)} />}
       {newRole && <NewRoleModal onClose={() => setNewRole(false)} onDone={() => qc.invalidateQueries({ queryKey: ['roles'] })} />}
     </div>

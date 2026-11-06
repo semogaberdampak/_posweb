@@ -21,6 +21,9 @@ supabase/migrations/003_costs_and_line_discount.sql  harga beli rahasia + diskon
 supabase/migrations/004_stock_views.sql     stock_by_branch, set_stock, adjust_stock (cek cabang)
 supabase/migrations/005_user_permissions.sql hak granular: user_permissions, has_perm baru, RPC kelola role/user
 supabase/migrations/006_email_domain.sql    trigger: akun BARU wajib @takom.id
+supabase/migrations/007_revoke_sessions.sql revoke_user_sessions (hanya service_role)
+supabase/migrations/008_active_branch.sql   my_scope() + create_sale(p_branch): cabang aktif untuk role lintas cabang
+supabase/functions/reset-password/index.ts  Edge Function: HANYA superadmin mereset kata sandi user mana pun
 supabase/functions/create-user/index.ts     Edge Function pembuat akun login+profil (service_role di sisi Supabase)
 scripts/import-products.mjs                 impor Excel master → products (+ product_costs)
 scripts/import-stock.mjs                    impor stok awal per cabang dari file hitung fisik (kode, jumlah)
@@ -49,7 +52,7 @@ Fitur baru = folder baru di `features/` + 1 baris di tabel `features` (SQL) + 1 
 - **Stok** (arti kolom Excel menurut pemilik):
   - `stokOnHand` (Excel) = TOTAL akumulasi stok sebuah produk secara global (pusat + semua cabang), BUKAN angka per cabang. Di aplikasi stok disimpan per (cabang, produk) di tabel `stock`; total global = jumlah semua cabang (dihitung, tidak disimpan). Rincian stok sebuah cabang hanya bisa dilihat/diubah user cabang itu dan role lintas cabang.
   - Stok awal (DIUSULKAN, pemilik khawatir menaruh semua di PUSAT lalu membagi ulang itu merepotkan, dan ia belum punya data stok per cabang): **JANGAN** mengimpor total Excel ke PUSAT. Setiap lokasi (pusat dan tiap cabang) menyerahkan hasil hitung fisiknya dalam file dua kolom `kode`,`jumlah` (template: `template_stok_cabang.xlsx`, disediakan terpisah) lalu diimpor per cabang: `npm run import:stock -- file.xlsx --branch=KODE [--dry-run]` (`scripts/import-stock.mjs`; hanya mengisi stok yang belum ada; koreksi lewat halaman Stok → "Aktual"). Angka Excel `stokOnHand` dipakai sebagai PEMBANDING: jumlah semua cabang vs total Excel (17.337 pcs / 1.285 produk) untuk mencari selisih. Sebelum sebuah cabang diisi, stoknya 0 dan kasirnya tidak bisa menjual (server menolak "stok tidak cukup") → hitung fisik wajib sebelum go-live.
-  - **Mutasi stok** antar cabang tetap perlu untuk pemindahan barang rutin (bukan untuk stok awal): BELUM dibuat; butuh migrasi 007 (reason `transfer_in`/`transfer_out` pada `stock_movements` + RPC `transfer_stock`: cek hak `stock.u`, akses cabang asal dan tujuan, stok asal cukup, atomik) + UI di halaman Stok. Tambahkan juga baris "Total semua cabang" di `StockByBranch`.
+  - **Mutasi stok** antar cabang tetap perlu untuk pemindahan barang rutin (bukan untuk stok awal): BELUM dibuat; butuh migrasi 009 (reason `transfer_in`/`transfer_out` pada `stock_movements` + RPC `transfer_stock`: cek hak `stock.u`, akses cabang asal dan tujuan, stok asal cukup, atomik) + UI di halaman Stok. Tambahkan juga baris "Total semua cabang" di `StockByBranch`.
   - `stokGudLain` = stok yang tampil di SEMUA toko, dikelompokkan per baris/cabang dengan jumlah aktual masing-masing → diwujudkan lewat RPC `stock_by_branch` (nama cabang + jumlah saja, terlihat semua user yang berhak).
   - `stokKonsinyasi` = DIBUANG (belum dipakai). `stokPE` = semua nol, dibiarkan sebagai card.
   - Stok awal diatur user **pengadaan**.
@@ -57,6 +60,13 @@ Fitur baru = folder baru di `features/` + 1 baris di tabel `features` (SQL) + 1 
 
 ## 4b. Palet warna (keputusan pemilik)
 Palet bertema amber hangat (hue 63), didefinisikan sebagai variabel CSS di `src/index.css` (`:root` = terang, `.dark` = gelap) dan dipetakan ke utilitas Tailwind lewat `@theme inline`: `bg-bg-dark | bg-bg | bg-bg-light`, `text-text | text-text-muted`, `bg-highlight`, `border-border | border-border-muted`, `bg-primary | text-on-primary`, `secondary`, `danger`, `warning`, `success`, `info`. Mode gelap = palet dari pemilik apa adanya; mode terang = turunan (terang-gelap dibalik, hue/chroma sama) dan bisa disetel. `--on-primary` adalah tambahan (teks di atas primary). **Jangan memakai kelas warna Tailwind mentah (slate/amber/red/...) maupun varian `dark:` untuk warna**: pakai token semantik di atas. `bg-bg-light` = panel/kartu (menonjol), `bg-bg-dark` = area tenggelam (header tabel, input), baris terpilih = `bg-primary/20`, hover = `bg-highlight/25`.
+
+## 4c. Cabang & akun (dari pemilik)
+Tujuh lokasi (kode `branches.code` yang disarankan): `KRANGGAN` Takom Kranggan · `KATEDRAL` Takom Katedral · `PAULUS` Takom Paulus · `SANTAMARIA` Takom Santa Maria · `ATHANASIUS` Takom Athanasius · `ANTONIUS` Takom Antonius (pemilik menulis "Antoius", diasumsikan salah ketik; KONFIRMASI) · `PUSAT` Takom Pusat (`is_pusat=true`, baris yang sudah ada diganti namanya).
+Akun kasir: 1 per cabang, KECUALI Katedral = 2. Role cabang hanya `kasir` (hanya cabangnya sendiri). Takom Pusat: banyak user dengan berbagai role (kabag, pengadaan, keuangan, dst.; lintas cabang), ditambahkan kemudian. Gunakan akun per orang (bukan akun bersama) agar audit jelas; dua kasir Katedral berbagi stok cabang yang sama (aman: pengurangan stok dikunci per baris). Username `<nama>@takom.id`.
+Hosting: paket gratis Supabase (500 MB DB, tanpa backup otomatis, proyek dijeda setelah 1 minggu tanpa aktivitas, tanpa SLA). Pro (±$25/bln) = backup harian 7 hari, 8 GB, tanpa jeda. Rekomendasi: backup mandiri terjadwal selama masih gratis dan naik ke Pro sebelum go-live 7 cabang. Pantau ukuran DB: `select pg_size_pretty(pg_database_size(current_database()));`.
+
+**Superadmin (dan role `all_branches`) harus bisa masuk ke SEMUA cabang** (keputusan pemilik, seperti admin pada umumnya): `roles.all_branches=true` membuka data semua cabang (RLS `can_see_branch`), dan header memiliki pemilih **Cabang aktif** (`AuthProvider.activeBranchId`, disimpan di sessionStorage). Di kasir, penjualan atas nama cabang aktif dikirim sebagai `p_branch` ke `create_sale`; server menolaknya untuk role non-lintas-cabang (mis. kasir). Berganti cabang mengosongkan keranjang; header menampilkan peringatan "Bertindak sebagai cabang lain". Halaman rekap/laporan nanti WAJIB memakai `activeBranchId` (atau pilihan "semua cabang").
 
 ## 5. Peran & hak akses (RBAC berbasis permission, bukan nama role)
 Tabel: `roles`, `features`, `role_permissions(role_id, feature_key, can_create/read/update/delete)`, `profiles(id, full_name, branch_id, role_id, is_active)`. Role = paket permission (template). Granular: tiap USER bisa punya pengecualian per fitur di `user_permissions` (NULL = ikut role, true/false = menimpa); `has_perm()` memakai pengecualian dulu, baru role. Superadmin mengatur semuanya di halaman Pengguna & Hak Akses (matriks Tambah/Lihat/Ubah/Hapus per fitur). Fitur baru = baris baru di tabel `features` → otomatis muncul di matriks. `roles.all_branches=true` → boleh lihat semua cabang.
@@ -74,7 +84,8 @@ Ide role tambahan yang sudah didiskusikan (belum dibuat): supervisor kasir, guda
 7. Input pencarian dibersihkan (`shared/search.ts`) sebelum masuk filter PostgREST. Pesan login generik. Auto-logout idle 15 menit. Tanpa `dangerouslySetInnerHTML`.
 8. Penulisan ke `roles`, `role_permissions`, `profiles`, `user_permissions` HANYA lewat RPC (`set_role_permission`, `set_user_permission`, `set_user_role`, `set_user_active`, `create_role`); tidak ada policy tulis langsung. Penjaga anti-eskalasi: tidak boleh mengubah hak/role/status diri sendiri; hak role `superadmin` dan akun superadmin tidak bisa diubah dari aplikasi; hanya superadmin yang boleh memberi role superadmin / `all_branches`; mencentang Tambah/Ubah/Hapus otomatis memberi Lihat. Pembuatan akun login hanya lewat Edge Function `create-user` (cek `has_perm('users','c')` atas nama pemanggil; menolak role superadmin; rollback bila profil gagal).
 9. Semua akun baru WAJIB berformat `<username>@takom.id` (keputusan pemilik): dijaga di UI (NewUserModal hanya meminta username), Edge Function (`EMAIL_DOMAIN`, default takom.id) dan trigger DB (migrasi 006). Akun lama (superadmin@posweb.id) tidak diubah. Login menerima username saja (otomatis ditambah @takom.id).
-10. Fungsi/perubahan SQL baru: buat sebagai migrasi bernomor berikutnya, **idempoten** (aman diulang), lalu tambahkan uji di `tests/sql-smoke.mjs`.
+10. Reset kata sandi: hanya superadmin (dicek di Edge Function `reset-password` langsung ke tabel profiles/roles, bukan dari klaim token), berlaku untuk semua role; kata sandi tidak pernah dicatat di audit_log; sesi lama user dikeluarkan lewat `revoke_user_sessions`. Pengguna mengganti kata sandinya sendiri di Pengaturan (min. 12 karakter).
+11. Fungsi/perubahan SQL baru: buat sebagai migrasi bernomor berikutnya, **idempoten** (aman diulang), lalu tambahkan uji di `tests/sql-smoke.mjs`.
 
 ## 7. Data Excel sumber (`database28Ags.xlsx`, sheet `DataMaster`, baris 1 = judul, 32.656 produk, 37 kolom A–AK)
 - A `produk id` = kode produk (TEKS, 10 karakter, ada yang alfanumerik seperti `1115AX0126`; unik) · B `prod Desc` = nama (maks 24 karakter; kolom F `Prod Nama Pnjng` = nama panjang) · O `Price2` = harga jual · AK `pengarang` (±55% kosong) · AG `Status` Y/N (N → nonaktif).
@@ -84,7 +95,7 @@ Ide role tambahan yang sudah didiskusikan (belum dibuat): supervisor kasir, guda
 - Impor: `npm run import:products -- file.xlsx --dry-run` lalu tanpa `--dry-run`. Default produk yang sudah ada DILEWATI (tidak menimpa harga yang diubah di aplikasi); `--update` menimpa. Stok awal: `--stock-branch=KODE` (hanya mengisi stok yang belum ada).
 
 ## 8. Cara menjalankan
-1. Supabase SQL Editor (role `postgres`): jalankan `schema.sql` lalu `migrations/002` → `003` → `004` → `005` → `006` berurutan. Setelah 005, pasang Edge Function `create-user` (Supabase → Edge Functions → Deploy a new function → Via Editor, nama `create-user`, tempel isi `supabase/functions/create-user/index.ts`; biarkan Verify JWT aktif; opsional secret `ALLOWED_ORIGIN` = alamat web aplikasi). Fungsi ini BELUM diuji di Supabase.
+1. Supabase SQL Editor (role `postgres`): jalankan `schema.sql` lalu `migrations/002` → `003` → `004` → `005` → `006` → `007` → `008` berurutan. Setelah 005, pasang Edge Function `create-user` dan `reset-password` (Supabase → Edge Functions → Deploy a new function → Via Editor, nama `create-user`, tempel isi `supabase/functions/create-user/index.ts`; biarkan Verify JWT aktif; opsional secret `ALLOWED_ORIGIN` = alamat web aplikasi). Fungsi ini BELUM diuji di Supabase.
 2. Buat user di Authentication → Users (centang Auto Confirm), lalu isi `profiles` dengan SQL (lihat README). User tanpa baris `profiles` aktif akan langsung dikeluarkan oleh aplikasi.
 3. `.env` dari `.env.example` (URL + anon key). `.env.import` dari `.env.import.example` (hanya untuk skrip impor, di komputer pemilik).
 4. `npm install` → `npm run dev` (http://localhost:5173). Cek: `npx tsc --noEmit`, `npm run build`, `npm run test:sql`.
@@ -103,7 +114,7 @@ Catatan lingkungan: shell sandbox kadang `sh` (tanpa brace expansion). Tailwind 
 ## 10. Pertanyaan terbuka (tanya pemilik, jangan menebak)
 - Konfirmasi pemilik untuk jalur stok awal di atas (hitung fisik per lokasi + impor per cabang). Cabang selain PUSAT harus ditambahkan dulu ke `branches` (butuh nama dan kode semua cabang).
 - Barcode di buku berisi nomor apa? Pencarian scan kini mencocokkan **kode produk (kolom A)** persis. Jika barcode = ISBN (`prod ISBN` di Excel berformat `979-672-465-0`), perlu kolom/indeks pencarian ISBN.
-- Nama dan kode semua cabang; daftar user awal dan rolenya.
+- Konfirmasi ejaan cabang ke-6 (Antonius) dan nama orang untuk akun kasir tiap cabang. Daftar user Pusat menyusul.
 - Printer struk (thermal 80mm via dialog cetak browser sudah ada; QZ Tray bila ingin cetak tanpa dialog).
 
 ## 11. Jangan lakukan

@@ -14,13 +14,14 @@ export async function searchProducts(q: string): Promise<Product[]> {
 
 /** Harga, diskon & cabang DIHITUNG ULANG di server; klien hanya kirim id, qty, dan persen diskon per baris. */
 export async function createSale(
-  lines: CartLine[], member: string, method: Method, cash?: number,
+  lines: CartLine[], member: string, method: Method, cash?: number, branchId?: string,
 ): Promise<SaleResult> {
   const { data, error } = await supabase.rpc('create_sale', {
     p_items: lines.map((l) => ({ product_id: l.id, qty: l.qty, discount_pct: l.disc })),
     p_member: member.trim(),
     p_method: method,
     p_cash_received: cash ?? null,
+    p_branch: branchId ?? null, // hanya diterima server bila role boleh lintas cabang
   })
   if (error) throw new Error(error.message || 'Transaksi gagal')
   return data as SaleResult

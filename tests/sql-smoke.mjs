@@ -10,8 +10,8 @@ const sql = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8')
 const db = new PGlite({ extensions: { pg_trgm } })
 const run = async (label, sql) => { try { await db.exec(sql); console.log('OK  ', label) } catch (e) { console.log('FAIL', label, '->', e.message); process.exit(1) } }
 await run('stub supabase', `
- create role anon nologin; create role authenticated nologin;
- create schema auth; create table auth.users(id uuid primary key, email text);
+ create role anon nologin; create role authenticated nologin; create role service_role nologin;
+ create schema auth; create table auth.users(id uuid primary key, email text); create table auth.sessions(id uuid primary key default gen_random_uuid(), user_id uuid);
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true),'')::uuid $$;
  grant usage on schema public to anon, authenticated; grant usage on schema auth to authenticated;
  grant execute on function auth.uid() to anon, authenticated;`)
@@ -108,3 +108,37 @@ console.log('budi@gmail.com           :', await ins('budi@gmail.com'))
 console.log('x@takom.id.evil.com      :', await ins('x@takom.id.evil.com'))
 console.log('x@sub.takom.id           :', await ins('x@sub.takom.id'))
 console.log('tanpa email (null)       :', await ins(null))
+
+// ===== uji 007: keluarkan sesi =====
+await run('007', sql('supabase/migrations/007_revoke_sessions.sql'))
+await run('007 ulang', sql('supabase/migrations/007_revoke_sessions.sql'))
+await run('seed sesi', `insert into auth.sessions(user_id) values ('${U(1)}'),('${U(1)}'),('${U(2)}');`)
+console.log('user biasa memanggil revoke_user_sessions:', await call(1, `select revoke_user_sessions('${U(1)}')`))
+await db.exec(`set role service_role`)
+let r7 = 'OK'; try { await db.exec(`select revoke_user_sessions('${U(1)}')`) } catch (e) { r7 = 'ERR: ' + e.message }
+await db.exec(`reset role`)
+console.log('service_role memanggil                    :', r7, '| sesi tersisa:', JSON.stringify(await q(`select user_id from auth.sessions`)), '(harus hanya user 2)')
+
+// ===== uji 008: cabang aktif =====
+await run('008', sql('supabase/migrations/008_active_branch.sql'))
+await run('008 ulang', sql('supabase/migrations/008_active_branch.sql'))
+await db.exec(`update profiles set is_active = true where id = '${U(1)}'; update user_permissions set can_create = null where user_id = '${U(1)}'; update profiles set role_id = '${kasirRole}' where id = '${U(1)}'`)
+const cab1 = (await q(`select id from branches where code='CAB1'`))[0].id
+const stockAt = async (code, br) => (await q(`select s.qty from stock s join products p on p.id=s.product_id join branches b on b.id=s.branch_id where p.code='${code}' and b.code='${br}'`))[0]?.qty
+const sale5 = async (n, branch) => { try { return JSON.stringify((await as(n, `select create_sale('${items([{product_id:A,qty:2,discount_pct:0}])}'::jsonb, null, 'qris', null, ${branch?`'${branch}'`:'null'}) as r`))[0].r.invoice_no) } catch (e) { return 'ERR: ' + e.message } }
+console.log('my_scope superadmin / kasir          :', JSON.stringify(await as(5,'select * from my_scope()')), JSON.stringify(await as(1,'select * from my_scope()')))
+const before = await stockAt('A1','CAB1')
+console.log('superadmin jual atas nama CAB1       :', await sale5(5, cab1), '| stok CAB1', before, '->', await stockAt('A1','CAB1'), '(harus turun 2)')
+console.log('kasir jual cabang lain (CAB1) ditolak:', await sale5(1, cab1))
+console.log('kasir jual cabangnya sendiri (null)  :', await sale5(1, null))
+console.log('cabang tidak valid ditolak           :', await sale5(5, '00000000-0000-0000-0000-0000000000aa'))
+console.log('sales tercatat di cabang?            :', JSON.stringify(await q(`select b.code, count(*)::int n from sales s join branches b on b.id=s.branch_id group by 1 order by 1`)))
+// status migrasi (dipakai juga untuk panduan pemilik)
+console.log('STATUS:', JSON.stringify(await q(`
+ select '002' as migrasi, exists(select 1 from information_schema.columns where table_name='products' and column_name='author') as sudah
+ union all select '003', to_regclass('public.product_costs') is not null
+ union all select '004', to_regprocedure('public.stock_by_branch(uuid)') is not null
+ union all select '005', to_regclass('public.user_permissions') is not null
+ union all select '006', exists(select 1 from pg_trigger where tgname='enforce_email_domain')
+ union all select '007', to_regprocedure('public.revoke_user_sessions(uuid)') is not null
+ union all select '008', to_regprocedure('public.my_scope()') is not null`)))

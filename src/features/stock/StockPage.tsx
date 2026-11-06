@@ -7,7 +7,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { useDebounced } from '../../shared/hooks'
 
 export default function StockPage() {
-  const { can, profile } = useAuth()
+  const { can, activeBranchId } = useAuth()
   const canEdit = can('stock', 'u')
   const [q, setQ] = useState('')
   const dq = useDebounced(q, 250)
@@ -64,9 +64,9 @@ export default function StockPage() {
             <div><div className="font-semibold">{sel.name}</div><div className="font-mono text-sm text-text-muted">{sel.code}</div></div>
             <div className={`space-y-2 ${isFetching ? 'opacity-70' : ''}`}>
               {stocks.map((b) => (
-                <div key={b.branch_id} className={`flex items-center gap-2 rounded-2xl border p-3 ${b.branch_id === profile?.branch_id ? 'border-primary' : 'border-border-muted'}`}>
+                <div key={b.branch_id} className={`flex items-center gap-2 rounded-2xl border p-3 ${b.branch_id === activeBranchId ? 'border-primary' : 'border-border-muted'}`}>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium">{b.branch_name}{b.branch_id === profile?.branch_id ? ' (Anda)' : ''}</div>
+                    <div className="truncate font-medium">{b.branch_name}{b.branch_id === activeBranchId ? ' (aktif)' : ''}</div>
                     <div className="text-sm text-text-muted">Stok: <b className="text-text">{b.qty}</b></div>
                   </div>
                   {canEdit && <>

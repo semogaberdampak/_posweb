@@ -1,4 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { listBranches } from '../users/api'
 import { Boxes, ClipboardCheck, DollarSign, LogOut, Moon, Package, Settings, ShieldCheck, ShoppingCart, Store, Sun, type LucideIcon } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { useTheme } from '../settings/theme'
@@ -14,7 +16,9 @@ const NAV: { to: string; label: string; feature: string; icon: LucideIcon }[] = 
 ]
 
 export default function Layout() {
-  const { profile, can, signOut } = useAuth()
+  const { profile, can, signOut, allBranches, activeBranchId, setActiveBranchId } = useAuth()
+  const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: listBranches, enabled: allBranches })
+  const actingElsewhere = allBranches && !!activeBranchId && activeBranchId !== profile?.branch_id
   const { theme, toggle } = useTheme()
   const branch = profile?.branch_name ?? '-'
 
@@ -56,9 +60,15 @@ export default function Layout() {
 
       <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
         <header className="z-10 flex items-center justify-between border-b border-border-muted bg-bg-light px-6 py-3.5 print:hidden">
-          <span className="text-xs text-text-muted">
-            Cabang: <strong className="text-text">{branch}</strong>
-          </span>
+          <div className="flex items-center gap-2 text-xs text-text-muted">
+            <span>Cabang aktif:</span>
+            {allBranches && branches.length > 0 ? (
+              <select aria-label="Cabang aktif" className="input !w-auto !py-1 text-sm" value={activeBranchId ?? ''} onChange={(e) => setActiveBranchId(e.target.value)}>
+                {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            ) : <strong className="text-text">{branch}</strong>}
+            {actingElsewhere && <span className="rounded-full bg-warning/20 px-2 py-0.5 text-warning">Bertindak sebagai cabang lain</span>}
+          </div>
           <div className="flex items-center gap-3">
             <button onClick={toggle} title="Ganti mode gelap/terang"
               className="rounded-xl bg-bg-dark p-2.5 text-text-muted transition hover:bg-highlight/25">

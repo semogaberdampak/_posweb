@@ -13,5 +13,3 @@ dist
 *.csv
 import-report/
 .env.import
-pos-app.zip
-

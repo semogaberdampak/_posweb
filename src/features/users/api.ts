@@ -39,12 +39,19 @@ export const setUserRole = (user: string, role: string, branch: string) => rpc('
 export const setUserActive = (user: string, active: boolean) => rpc('set_user_active', { p_user: user, p_active: active })
 export const createRole = (name: string, desc: string, allBranches: boolean) => rpc('create_role', { p_name: name, p_desc: desc, p_all_branches: allBranches })
 
-/** Membuat akun login butuh kunci rahasia, jadi dikerjakan Edge Function `create-user` (lihat supabase/functions). */
-export async function createUser(body: { full_name: string; username: string; password: string; role_id: string; branch_id: string }) {
-  const { error } = await supabase.functions.invoke('create-user', { body })
+async function invokeFn(name: string, body: Record<string, unknown>, fallback: string) {
+  const { error } = await supabase.functions.invoke(name, { body })
   if (error) {
-    let m = 'Gagal membuat pengguna. Pastikan fungsi create-user sudah dipasang di Supabase.'
+    let m = fallback
     try { const j = await (error as { context?: Response }).context?.json(); if (j?.error) m = j.error } catch { /* pakai pesan umum */ }
     throw new Error(m)
   }
 }
+
+/** Membuat akun login butuh kunci rahasia, jadi dikerjakan Edge Function `create-user` (lihat supabase/functions). */
+export const createUser = (body: { full_name: string; username: string; password: string; role_id: string; branch_id: string }) =>
+  invokeFn('create-user', body, 'Gagal membuat pengguna. Pastikan fungsi create-user sudah dipasang di Supabase.')
+
+/** Hanya superadmin (dicek di Edge Function `reset-password`). */
+export const resetPassword = (userId: string, password: string) =>
+  invokeFn('reset-password', { user_id: userId, password }, 'Gagal mereset kata sandi. Pastikan fungsi reset-password sudah dipasang di Supabase.')

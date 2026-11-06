@@ -13,6 +13,9 @@ type AuthCtx = {
   profile: Profile | null
   loading: boolean
   can: (feature: string, action?: Action) => boolean
+  allBranches: boolean                       // role lintas cabang (mis. superadmin)
+  activeBranchId: string | null              // cabang yang sedang dipakai (default: cabang user)
+  setActiveBranchId: (id: string) => void
   signOut: () => Promise<void>
 }
 const Ctx = createContext<AuthCtx>(null!)
@@ -25,11 +28,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [perms, setPerms] = useState<PermRow[]>([])
   const [overrides, setOverrides] = useState<Override[]>([])
+  const [allBranches, setAllBranches] = useState(false)
+  const [activeBranch, setActiveBranch] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
-    setProfile(null); setPerms([]); setOverrides([])
+    setProfile(null); setPerms([]); setOverrides([]); setAllBranches(false); setActiveBranch(null)
+    try { sessionStorage.removeItem('active_branch') } catch { /* abaikan */ }
   }, [])
 
   useEffect(() => {
@@ -40,21 +46,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const uid = session?.user.id
   useEffect(() => {
-    if (!uid) { setProfile(null); setPerms([]); setOverrides([]); return }
+    if (!uid) { setProfile(null); setPerms([]); setOverrides([]); setAllBranches(false); setActiveBranch(null); return }
     let alive = true
     ;(async () => {
       const { data: p } = await supabase.from('profiles')
-        .select('full_name,branch_id,role_id,is_active,branches(name),roles(name)').eq('id', uid).single()
+        .select('full_name,branch_id,role_id,is_active,branches(name)').eq('id', uid).single()
       if (!alive) return
       if (!p || !p.is_active || !p.role_id) { await signOut(); setLoading(false); return }
       const { data: rp } = await supabase.from('role_permissions')
         .select('feature_key,can_create,can_read,can_update,can_delete').eq('role_id', p.role_id)
       const { data: ov } = await supabase.from('user_permissions').select('feature_key,can_create,can_read,can_update,can_delete').eq('user_id', uid)
+      const { data: sc } = await supabase.rpc('my_scope') // role + boleh lintas cabang (tanpa perlu hak baca tabel roles)
       if (!alive) return
+      const scope = (sc as { role_name: string; all_branches: boolean }[] | null)?.[0]
       setOverrides((ov ?? []) as Override[])
-      const x = p as unknown as { branches?: { name?: string } | null; roles?: { name?: string } | null }
+      const x = p as unknown as { branches?: { name?: string } | null }
       setProfile({ full_name: p.full_name, branch_id: p.branch_id, role_id: p.role_id, is_active: p.is_active,
-        branch_name: x.branches?.name, role_name: x.roles?.name })
+        branch_name: x.branches?.name, role_name: scope?.role_name })
+      setAllBranches(!!scope?.all_branches)
+      try { const saved = sessionStorage.getItem('active_branch'); if (saved && scope?.all_branches) setActiveBranch(saved) } catch { /* abaikan */ }
       setPerms(rp ?? []); setLoading(false)
     })()
     return () => { alive = false }
@@ -71,6 +81,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { c: r.can_create, r: r.can_read, u: r.can_update, d: r.can_delete }[action]
   }, [perms, overrides])
 
-  const value = useMemo(() => ({ session, profile, loading, can, signOut }), [session, profile, loading, can, signOut])
+  const setActiveBranchId = useCallback((id: string) => {
+    setActiveBranch(id)
+    try { sessionStorage.setItem('active_branch', id) } catch { /* abaikan */ }
+  }, [])
+  // Hanya role lintas cabang yang bisa berpindah; server tetap memeriksa ulang (create_sale/can_see_branch)
+  const activeBranchId = allBranches && activeBranch ? activeBranch : profile?.branch_id ?? null
+
+  const value = useMemo(() => ({ session, profile, loading, can, allBranches, activeBranchId, setActiveBranchId, signOut }),
+    [session, profile, loading, can, allBranches, activeBranchId, setActiveBranchId, signOut])
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

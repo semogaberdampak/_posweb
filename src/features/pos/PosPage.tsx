@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import { createSale, searchProducts } from './api'
 import { Receipt } from './Receipt'
 import { StockByBranch } from '../stock/StockByBranch'
+import { useAuth } from '../auth/AuthProvider'
 import { rupiah } from '../../shared/format'
 import { useDebounced } from '../../shared/hooks'
 import type { CartLine, Method, Product, SaleResult } from './types'
@@ -32,6 +33,8 @@ export default function PosPage() {
   const [notice, setNotice] = useState('')
   const [done, setDone] = useState<Done | null>(null)
   const qc = useQueryClient()
+  const { activeBranchId, allBranches, profile } = useAuth()
+  const sellBranch = allBranches && activeBranchId && activeBranchId !== profile?.branch_id ? activeBranchId : undefined
   const searchRef = useRef<HTMLInputElement>(null)
   const scanning = useRef(false)
 
@@ -48,6 +51,8 @@ export default function PosPage() {
   const memberOk = !anyDisc || member.trim().length > 0
   const cashNum = Number(cash.replace(/\D/g, '')) || 0
 
+  // ganti cabang aktif = mulai transaksi baru (cegah keranjang terbawa ke cabang lain)
+  useEffect(() => { setCart([]); setStep('items'); setAllDisc(null); setMember(''); setMethod(null); setCash('') }, [activeBranchId])
   useEffect(() => setCursor(0), [dq])
   useEffect(() => { if (step === 'items') searchRef.current?.focus() }, [step])
   useEffect(() => { document.querySelector(`[data-row="${cursor}"]`)?.scrollIntoView({ block: 'nearest' }) }, [cursor])
@@ -93,7 +98,7 @@ export default function PosPage() {
     setBusy(true); setError('')
     const lines = cart.map((l) => ({ ...l, disc: eff(l) }))
     try {
-      const sale = await createSale(lines, member, m, m === 'cash' ? cashNum : undefined)
+      const sale = await createSale(lines, member, m, m === 'cash' ? cashNum : undefined, sellBranch)
       setDone({ sale, lines, method: m, cash: cashNum })
       void qc.invalidateQueries({ queryKey: ['stock-branches'] })
       setCart([]); setAllDisc(null); setMember(''); setMethod(null); setCash(''); setStep('items')
