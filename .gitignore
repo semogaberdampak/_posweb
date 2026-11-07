@@ -13,3 +13,5 @@ dist
 *.csv
 import-report/
 .env.import
+template_stok_cabang.csv
+pos-app.zip
