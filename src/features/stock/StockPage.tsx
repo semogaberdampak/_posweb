@@ -3,6 +3,9 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { listProducts, type ProductRow } from '../products/api'
 import { stockByBranch } from './api'
 import { StockEdit, type EditTarget } from './StockEdit'
+import { ImportStockModal } from './ImportStockModal'
+import { TransferModal } from './TransferModal'
+import { listBranches } from '../users/api'
 import { useAuth } from '../auth/AuthProvider'
 import { useDebounced } from '../../shared/hooks'
 
@@ -14,6 +17,9 @@ export default function StockPage() {
   const [cursor, setCursor] = useState(0)
   const [sel, setSel] = useState<ProductRow | null>(null)
   const [edit, setEdit] = useState<EditTarget | null>(null)
+  const [showImport, setShowImport] = useState(false)
+  const [showTransfer, setShowTransfer] = useState(false)
+  const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: listBranches, enabled: canEdit })
   const searchRef = useRef<HTMLInputElement>(null)
 
   const { data } = useQuery({ queryKey: ['admin-products', dq, 'active', 0], queryFn: () => listProducts(dq, 'active', 0), placeholderData: keepPreviousData })
@@ -25,7 +31,7 @@ export default function StockPage() {
   useEffect(() => setCursor(0), [dq])
   useEffect(() => { document.querySelector(`[data-srow="${cursor}"]`)?.scrollIntoView({ block: 'nearest' }) }, [cursor])
   useEffect(() => {
-    if (edit) return
+    if (edit || showImport || showTransfer) return
     const h = (e: KeyboardEvent) => {
       if (e.key === 'F2') { e.preventDefault(); searchRef.current?.focus() }
       else if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((c) => Math.min(c + 1, rows.length - 1)) }
@@ -34,12 +40,15 @@ export default function StockPage() {
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [edit, rows, cursor])
+  }, [edit, showImport, showTransfer, rows, cursor])
 
   return (
     <div className="grid h-full grid-cols-[1fr_28rem] gap-4 p-4">
       <section className="flex min-h-0 flex-col gap-3">
-        <h1 className="text-xl font-semibold">Stok & Pengadaan</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold">Stok & Pengadaan</h1>
+          {canEdit && <button className="btn-ghost ml-auto" onClick={() => setShowImport(true)}>Impor stok (CSV)</button>}
+        </div>
         <input ref={searchRef} className="input" placeholder="Cari kode / nama / pengarang (F2)" value={q} onChange={(e) => setQ(e.target.value)} maxLength={60} />
         <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-border-muted bg-bg-light">
           <table className="w-full text-left">
@@ -62,6 +71,7 @@ export default function StockPage() {
         {!sel ? <p className="text-text-muted">Pilih produk di kiri untuk melihat stok tiap cabang.</p> : (
           <>
             <div><div className="font-semibold">{sel.name}</div><div className="font-mono text-sm text-text-muted">{sel.code}</div></div>
+            {canEdit && <button className="btn-ghost w-full" onClick={() => setShowTransfer(true)}>Pindah stok antar cabang</button>}
             <div className={`space-y-2 ${isFetching ? 'opacity-70' : ''}`}>
               {stocks.map((b) => (
                 <div key={b.branch_id} className={`flex items-center gap-2 rounded-2xl border p-3 ${b.branch_id === activeBranchId ? 'border-primary' : 'border-border-muted'}`}>
@@ -80,6 +90,8 @@ export default function StockPage() {
         )}
       </aside>
       {edit && <StockEdit t={edit} onClose={() => setEdit(null)} />}
+      {showImport && <ImportStockModal branches={branches} defaultBranchId={activeBranchId} onClose={() => setShowImport(false)} />}
+      {showTransfer && sel && <TransferModal productId={sel.id} productName={sel.name} stocks={stocks} defaultFrom={activeBranchId} onClose={() => setShowTransfer(false)} />}
     </div>
   )
 }

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createSale, searchProducts } from './api'
-import { Receipt } from './Receipt'
+import { PrintSheet } from '../print/views'
+import { useInvoiceCfg, useReceiptCfg, type PrintData } from '../print/templates'
+import { listBranches } from '../users/api'
 import { StockByBranch } from '../stock/StockByBranch'
 import { useAuth } from '../auth/AuthProvider'
 import { rupiah } from '../../shared/format'
@@ -16,7 +18,7 @@ const METHODS: { key: Method; label: string }[] = [
 ]
 // items -> klik "Pembayaran" -> discount (diskon per produk / semua) -> payment (metode bayar)
 type Step = 'items' | 'discount' | 'payment'
-type Done = { sale: SaleResult; lines: CartLine[]; method: Method; cash: number }
+type Done = { sale: SaleResult; lines: CartLine[]; method: Method; cash: number; member: string; at: Date }
 
 export default function PosPage() {
   const [step, setStep] = useState<Step>('items')
@@ -33,6 +35,9 @@ export default function PosPage() {
   const [notice, setNotice] = useState('')
   const [done, setDone] = useState<Done | null>(null)
   const qc = useQueryClient()
+  const [printKind, setPrintKind] = useState<'receipt' | 'invoice'>('receipt')
+  const receiptCfg = useReceiptCfg(), invoiceCfg = useInvoiceCfg() // dimuat sejak halaman dibuka agar siap saat cetak
+  const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: listBranches })
   const { activeBranchId, allBranches, profile } = useAuth()
   const sellBranch = allBranches && activeBranchId && activeBranchId !== profile?.branch_id ? activeBranchId : undefined
   const searchRef = useRef<HTMLInputElement>(null)
@@ -58,7 +63,8 @@ export default function PosPage() {
   useEffect(() => { document.querySelector(`[data-row="${cursor}"]`)?.scrollIntoView({ block: 'nearest' }) }, [cursor])
   useEffect(() => {
     if (!done) return
-    const t = setTimeout(() => window.print(), 150)
+    setPrintKind('receipt') // struk 80mm otomatis; nota A4 lewat tombol
+    const t = setTimeout(() => window.print(), 200)
     return () => clearTimeout(t)
   }, [done])
 
@@ -99,12 +105,22 @@ export default function PosPage() {
     const lines = cart.map((l) => ({ ...l, disc: eff(l) }))
     try {
       const sale = await createSale(lines, member, m, m === 'cash' ? cashNum : undefined, sellBranch)
-      setDone({ sale, lines, method: m, cash: cashNum })
+      setDone({ sale, lines, method: m, cash: cashNum, member: member.trim(), at: new Date() })
       void qc.invalidateQueries({ queryKey: ['stock-branches'] })
       setCart([]); setAllDisc(null); setMember(''); setMethod(null); setCash(''); setStep('items')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Transaksi gagal')
     } finally { setBusy(false) }
+  }
+  function printAgain(k: 'receipt' | 'invoice') { setPrintKind(k); setTimeout(() => window.print(), 200) }
+  function printData(d: Done): PrintData {
+    const bid = activeBranchId ?? profile?.branch_id
+    return {
+      invoiceNo: d.sale.invoice_no, at: d.at, cashier: profile?.full_name ?? '', branch: branches.find((b) => b.id === bid)?.name ?? profile?.branch_name ?? '',
+      customer: d.member, lines: d.lines.map((l) => ({ code: l.code, name: l.name, price: l.price, qty: l.qty, disc: l.disc })),
+      subtotal: d.sale.subtotal, discount: d.sale.discount, total: d.sale.total, method: d.method,
+      paid: d.method === 'cash' ? d.cash : d.sale.total, change: d.sale.change,
+    }
   }
   function choose(m: Method) {
     setMethod(m); setError('')
@@ -148,6 +164,8 @@ export default function PosPage() {
             <div className="rounded-2xl bg-success/20 px-4 py-2 text-success">
               {done.sale.invoice_no} tersimpan · Total {rupiah(done.sale.total)}
               {done.method === 'cash' && <b> · Kembalian {rupiah(done.sale.change)}</b>}
+              <button className="btn-ghost ml-3 !py-1" onClick={() => printAgain('receipt')}>Cetak ulang struk</button>
+              <button className="btn-ghost ml-2 !py-1" onClick={() => printAgain('invoice')}>Cetak nota A4</button>
             </div>
           )}
           <input ref={searchRef} className="input" placeholder="Scan barcode / cari kode atau nama produk (F2)" value={q}
@@ -261,7 +279,7 @@ export default function PosPage() {
           {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         </aside>
       </div>
-      {done && <Receipt {...done} />}
+      {done && <PrintSheet kind={printKind} data={printData(done)} receipt={receiptCfg} invoice={invoiceCfg} />}
     </>
   )
 }

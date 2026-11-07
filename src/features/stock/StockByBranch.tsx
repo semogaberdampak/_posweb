@@ -22,6 +22,9 @@ export function StockByBranch({ productId }: { productId?: string }) {
           </span>
         )
       })}
+      {data.length > 0 && (
+        <span className="rounded-full border border-border px-3 py-1 text-sm text-text-muted">Total semua cabang: <b className="text-text">{data.reduce((a, b) => a + b.qty, 0)}</b></span>
+      )}
     </div>
   )
 }

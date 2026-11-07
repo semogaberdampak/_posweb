@@ -7,6 +7,8 @@ import ProductsPage from './features/products/ProductsPage'
 import UsersPage from './features/users/UsersPage'
 import StockPage from './features/stock/StockPage'
 import SettingsPage from './features/settings/SettingsPage'
+import SalesRecapPage from './features/sales/SalesRecapPage'
+import FormatNotaPage from './features/print/FormatNotaPage'
 
 const Soon = ({ title }: { title: string }) => <div className="p-6 text-xl">{title} — segera hadir</div>
 
@@ -20,9 +22,10 @@ export default function App() {
           <Route path="/pos" element={<RequirePerm feature="pos"><PosPage /></RequirePerm>} />
           <Route path="/produk" element={<RequirePerm feature="products"><ProductsPage /></RequirePerm>} />
           <Route path="/stok" element={<RequirePerm feature="stock"><StockPage /></RequirePerm>} />
-          <Route path="/laporan" element={<RequirePerm feature="sales_recap"><Soon title="Rekap Penjualan" /></RequirePerm>} />
+          <Route path="/laporan" element={<RequirePerm feature="sales_recap"><SalesRecapPage /></RequirePerm>} />
           <Route path="/keuangan" element={<RequirePerm feature="finance"><Soon title="Keuangan" /></RequirePerm>} />
           <Route path="/pengguna" element={<RequirePerm feature="users"><UsersPage /></RequirePerm>} />
+          <Route path="/format-nota" element={<RequirePerm feature="settings"><FormatNotaPage /></RequirePerm>} />
           <Route path="/pengaturan" element={<RequirePerm feature="settings"><SettingsPage /></RequirePerm>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

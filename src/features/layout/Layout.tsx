@@ -1,17 +1,18 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { listBranches } from '../users/api'
-import { Boxes, ClipboardCheck, DollarSign, LogOut, Moon, Package, Settings, ShieldCheck, ShoppingCart, Store, Sun, type LucideIcon } from 'lucide-react'
+import { Boxes, ClipboardCheck, DollarSign, LogOut, Moon, Package, Settings, FileText, ShieldCheck, ShoppingCart, Store, Sun, type LucideIcon } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { useTheme } from '../settings/theme'
 
-const NAV: { to: string; label: string; feature: string; icon: LucideIcon }[] = [
+const NAV: { to: string; label: string; feature: string; icon: LucideIcon; adminOnly?: boolean }[] = [
   { to: '/pos', label: 'Kasir Penjualan', feature: 'pos', icon: ShoppingCart },
   { to: '/produk', label: 'Produk & Harga', feature: 'products', icon: Package },
   { to: '/stok', label: 'Stok & Pengadaan', feature: 'stock', icon: Boxes },
   { to: '/laporan', label: 'Rekap Penjualan', feature: 'sales_recap', icon: ClipboardCheck },
   { to: '/keuangan', label: 'Keuangan', feature: 'finance', icon: DollarSign },
   { to: '/pengguna', label: 'Pengguna & Role', feature: 'users', icon: ShieldCheck },
+  { to: '/format-nota', label: 'Format Nota', feature: 'settings', icon: FileText, adminOnly: true },
   { to: '/pengaturan', label: 'Pengaturan', feature: 'settings', icon: Settings },
 ]
 
@@ -34,7 +35,7 @@ export default function Layout() {
             </div>
           </div>
           <nav className="max-h-[calc(100vh-220px)] space-y-1 overflow-y-auto p-3">
-            {NAV.filter((n) => can(n.feature, 'r')).map(({ to, label, icon: Icon }) => (
+            {NAV.filter((n) => can(n.feature, 'r') && (!n.adminOnly || profile?.role_name === 'superadmin')).map(({ to, label, icon: Icon }) => (
               <NavLink key={to} to={to}
                 className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${isActive
                   ? 'bg-primary text-on-primary shadow-md shadow-primary/20'

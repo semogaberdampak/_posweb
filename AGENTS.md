@@ -23,11 +23,20 @@ supabase/migrations/005_user_permissions.sql hak granular: user_permissions, has
 supabase/migrations/006_email_domain.sql    trigger: akun BARU wajib @takom.id
 supabase/migrations/007_revoke_sessions.sql revoke_user_sessions (hanya service_role)
 supabase/migrations/008_active_branch.sql   my_scope() + create_sale(p_branch): cabang aktif untuk role lintas cabang
+supabase/migrations/009_stock_tools.sql     import_stock() (impor CSV dari aplikasi), transfer_stock() (mutasi antar cabang), alasan transfer_in/out
+supabase/migrations/010_print_templates.sql  tabel print_templates (baca: semua user; tulis: hanya RPC save_print_template, superadmin)
+src/features/print/                         templates.ts (bawaan = nota lama TAKOM, merge aman, token), views.tsx (ReceiptView 80mm, InvoiceView A4, PrintSheet), FormatNotaPage.tsx (editor admin /format-nota)
+supabase/migrations/011_sales_recap.sql     RPC sales_recap (bulan/tahun WIB, cabang, halaman 20) + sale_detail (untuk detail & cetak ulang)
+src/features/sales/                         SalesRecapPage (filter bulan/tahun/cabang, kartu ringkasan, tabel 20 baris/halaman), SaleDetailModal (detail, cetak struk/A4, void), api.ts
+supabase/checks/integritas_stok.sql         pemeriksaan keutuhan (baca saja): stok = riwayat, tanpa minus, total transaksi cocok
 supabase/functions/reset-password/index.ts  Edge Function: HANYA superadmin mereset kata sandi user mana pun
 supabase/functions/create-user/index.ts     Edge Function pembuat akun login+profil (service_role di sisi Supabase)
 scripts/import-products.mjs                 impor Excel master → products (+ product_costs)
 scripts/import-stock.mjs                    impor stok awal per cabang dari file hitung fisik (kode, jumlah)
 tests/sql-smoke.mjs                         tes SQL otomatis (npm run test:sql)
+tests/e2e-flow.mjs                          uji alur lengkap 7 cabang: impor stok, semua metode bayar, diskon per baris, void, mutasi, keutuhan (npm run test:e2e [produk.json])
+tests/print-render.mjs                      uji tampilan struk/nota A4 + merge konfigurasi (npm run test:print)
+tests/stock-csv.mjs                         uji pembaca CSV stok (npm run test:csv)
 src/main.tsx, App.tsx, index.css            provider, route, gaya (.btn/.btn-primary/.btn-ghost/.input = rounded)
 src/lib/supabase.ts                         klien (hanya anon key dari .env)
 src/shared/                                 format.ts (rupiah), hooks.ts (useDebounced, useIdle), search.ts (cleanSearch), Modal.tsx
@@ -51,8 +60,8 @@ Fitur baru = folder baru di `features/` + 1 baris di tabel `features` (SQL) + 1 
 - Semua tombol/input **rounded**. Mode gelap/terang dengan toggle (header + halaman Pengaturan). Navigasi keyboard: F2 cari, ↑↓ pilih, Enter tambah/buka, F8 maju, Esc mundur, angka 1–4 pilih metode bayar.
 - **Stok** (arti kolom Excel menurut pemilik):
   - `stokOnHand` (Excel) = TOTAL akumulasi stok sebuah produk secara global (pusat + semua cabang), BUKAN angka per cabang. Di aplikasi stok disimpan per (cabang, produk) di tabel `stock`; total global = jumlah semua cabang (dihitung, tidak disimpan). Rincian stok sebuah cabang hanya bisa dilihat/diubah user cabang itu dan role lintas cabang.
-  - Stok awal (DIUSULKAN, pemilik khawatir menaruh semua di PUSAT lalu membagi ulang itu merepotkan, dan ia belum punya data stok per cabang): **JANGAN** mengimpor total Excel ke PUSAT. Setiap lokasi (pusat dan tiap cabang) menyerahkan hasil hitung fisiknya dalam file dua kolom `kode`,`jumlah` (template: `template_stok_cabang.xlsx`, disediakan terpisah) lalu diimpor per cabang: `npm run import:stock -- file.xlsx --branch=KODE [--dry-run]` (`scripts/import-stock.mjs`; hanya mengisi stok yang belum ada; koreksi lewat halaman Stok → "Aktual"). Angka Excel `stokOnHand` dipakai sebagai PEMBANDING: jumlah semua cabang vs total Excel (17.337 pcs / 1.285 produk) untuk mencari selisih. Sebelum sebuah cabang diisi, stoknya 0 dan kasirnya tidak bisa menjual (server menolak "stok tidak cukup") → hitung fisik wajib sebelum go-live.
-  - **Mutasi stok** antar cabang tetap perlu untuk pemindahan barang rutin (bukan untuk stok awal): BELUM dibuat; butuh migrasi 009 (reason `transfer_in`/`transfer_out` pada `stock_movements` + RPC `transfer_stock`: cek hak `stock.u`, akses cabang asal dan tujuan, stok asal cukup, atomik) + UI di halaman Stok. Tambahkan juga baris "Total semua cabang" di `StockByBranch`.
+  - Stok awal (SUDAH DIBUAT): tiap lokasi menghitung stok fisik → file CSV dua kolom `kode`,`jumlah` (template `template_stok_cabang.csv`; Excel Indonesia menyimpan CSV dengan titik koma, sudah ditangani) → halaman **Stok & Pengadaan → Impor stok (CSV)** (RPC `import_stock`, mode "isi stok awal saja" = aman, atau "timpa dengan hasil hitung" = opname). Alternatif baris perintah: `scripts/import-stock.mjs` (butuh kunci service_role lokal). Total Excel `stokOnHand` hanya PEMBANDING (jumlah semua cabang vs 17.337 pcs / 1.285 produk); `StockByBranch` menampilkan "Total semua cabang". Cabang yang stoknya belum diisi = 0 → kasirnya belum bisa menjual (hitung fisik wajib sebelum go-live).
+  - **Mutasi stok** antar cabang (SUDAH DIBUAT, migrasi 009): tombol "Pindah stok antar cabang" di halaman Stok; RPC `transfer_stock` atomik, mengunci baris berurutan (anti-deadlock), butuh hak `stock.u` dan akses ke kedua cabang (jadi role lintas cabang), total global tidak berubah.
   - `stokGudLain` = stok yang tampil di SEMUA toko, dikelompokkan per baris/cabang dengan jumlah aktual masing-masing → diwujudkan lewat RPC `stock_by_branch` (nama cabang + jumlah saja, terlihat semua user yang berhak).
   - `stokKonsinyasi` = DIBUANG (belum dipakai). `stokPE` = semua nol, dibiarkan sebagai card.
   - Stok awal diatur user **pengadaan**.
@@ -95,16 +104,16 @@ Ide role tambahan yang sudah didiskusikan (belum dibuat): supervisor kasir, guda
 - Impor: `npm run import:products -- file.xlsx --dry-run` lalu tanpa `--dry-run`. Default produk yang sudah ada DILEWATI (tidak menimpa harga yang diubah di aplikasi); `--update` menimpa. Stok awal: `--stock-branch=KODE` (hanya mengisi stok yang belum ada).
 
 ## 8. Cara menjalankan
-1. Supabase SQL Editor (role `postgres`): jalankan `schema.sql` lalu `migrations/002` → `003` → `004` → `005` → `006` → `007` → `008` berurutan. Setelah 005, pasang Edge Function `create-user` dan `reset-password` (Supabase → Edge Functions → Deploy a new function → Via Editor, nama `create-user`, tempel isi `supabase/functions/create-user/index.ts`; biarkan Verify JWT aktif; opsional secret `ALLOWED_ORIGIN` = alamat web aplikasi). Fungsi ini BELUM diuji di Supabase.
+1. Supabase SQL Editor (role `postgres`): jalankan `schema.sql` lalu `migrations/002` → `003` → `004` → `005` → `006` → `007` → `008` → `009` → `010` → `011` berurutan. Setelah 005, pasang Edge Function `create-user` dan `reset-password` (Supabase → Edge Functions → Deploy a new function → Via Editor, nama `create-user`, tempel isi `supabase/functions/create-user/index.ts`; biarkan Verify JWT aktif; opsional secret `ALLOWED_ORIGIN` = alamat web aplikasi). Fungsi ini BELUM diuji di Supabase.
 2. Buat user di Authentication → Users (centang Auto Confirm), lalu isi `profiles` dengan SQL (lihat README). User tanpa baris `profiles` aktif akan langsung dikeluarkan oleh aplikasi.
 3. `.env` dari `.env.example` (URL + anon key). `.env.import` dari `.env.import.example` (hanya untuk skrip impor, di komputer pemilik).
-4. `npm install` → `npm run dev` (http://localhost:5173). Cek: `npx tsc --noEmit`, `npm run build`, `npm run test:sql`.
+4. `npm install` → `npm run dev` (http://localhost:5173). Cek: `npx tsc --noEmit`, `npm run build`, `npm run test:sql`, `npm run test:e2e`, `npm run test:csv`, `npm run test:print`. Jalankan semua tes setiap mengubah SQL atau alur penjualan/stok; tambahkan kasus baru bila ada fitur baru.
 Catatan lingkungan: shell sandbox kadang `sh` (tanpa brace expansion). Tailwind v4: jangan `@apply` kelas kustom; pakai `@utility`.
 
 ## 9. Status
 **Selesai:** Pengguna & Hak Akses granular (migrasi 005 + halaman + Edge Function; SQL lolos tes lokal, UI/Edge Function belum diuji di Supabase), login, layout/tema, kasir (scan barcode, diskon per produk, bayar, struk), produk & harga (daftar, tambah/ubah, detail card, harga beli rahasia), stok per cabang (halaman Stok & Pengadaan, strip stok di kasir, detail produk), skrip impor, migrasi 002–004, tes SQL.
 **Belum dibuat (urutan yang disarankan):**
-1. Stok awal per lokasi via `import:stock` (lihat §4), tampilan "Total semua cabang", fitur Mutasi stok (migrasi 006), lalu uji kasir end-to-end dengan stok nyata.
+1. (Pemilik) hitung fisik tiap cabang → impor lewat aplikasi → uji kasir dengan stok nyata. Fitur impor/mutasi/total sudah ada; sisanya pekerjaan data, bukan kode.
 2. Rekap Penjualan: rekap harian kasir (cabangnya), rekap Kabag (inputan kasir), void transaksi (RPC `void_sale` sudah ada, UI belum).
 3. Keuangan: rekap penjualan per metode bayar.
 4. Halaman Cabang (tambah/nonaktifkan; saat ini cabang baru lewat SQL). Pengguna & Role SUDAH dibuat (lihat Status selesai) tetapi perlu diuji di Supabase sungguhan, termasuk Edge Function.
@@ -125,3 +134,16 @@ Catatan lingkungan: shell sandbox kadang `sh` (tanpa brace expansion). Tailwind 
 
 ## 12. Catatan serah-terima (22 Okt 2026)
 Pemilik pindah ke agen lain karena kredit Claude gratis habis. Hal yang perlu ditanyakan ke pemilik di awal: (a) apakah migrasi `004_stock_views.sql` sudah dijalankan di Supabase; (b) apakah `delete from stock;` (membuang stok percobaan 100 pcs) sudah dijalankan; (c) angka yang muncul saat scan satu buku (kode produk atau ISBN); (d) nama + kode semua cabang. `npm run test:sql` butuh `npm install` dulu (paket `@electric-sql/pglite`).
+
+## Format cetak (struk 80mm & nota A4)
+- Dua format meniru nota lama TAKOM: **struk 80mm** (nota transaksi, otomatis tercetak setelah bayar) dan **nota A4** (laporan; tombol "Cetak nota A4" / "Cetak ulang struk" di banner setelah transaksi).
+- Setiap elemen (kepala, label, judul kolom, kaki, tampil/sembunyi baris, kolom PPn, lebar, huruf) disimpan sebagai JSON di `print_templates` dan **hanya superadmin** yang bisa mengubah lewat halaman **Format Nota** (`/format-nota`, ada pratinjau langsung, "Cetak contoh", "Kembalikan bawaan"). Penulisan hanya lewat RPC `save_print_template` (cek superadmin di server, maks. 20 KB). Semua teks dirender sebagai teks React (tanpa HTML mentah).
+- Token di teks: `{kasir} {cabang} {CABANG} {waktu} {tanggal} {no} {pelanggan}`. Pelanggan = member yang diketik kasir, bila kosong memakai `defaultCust`.
+- Kolom PPn nota A4: hanya TAMPILAN (harga jual di sistem sudah termasuk pajak): harga tampil = harga / (1 + PPn efektif); bawaan PPn tertulis 12 dan efektif 11 (cocok dengan nota lama: 46.000 → 41.441). Total & stok tidak terpengaruh.
+- Cetak ulang dari Rekap Penjualan sudah ada (struk 80mm & nota A4). Nomor nota memakai nomor sistem baru, bukan format `210726110001` lama.
+
+## Rekap Penjualan (`/laporan`, fitur `sales_recap`)
+- Alur: pilih **Bulan** → pilih **Tahun** (→ pilih **Cabang** bagi role lintas cabang; bawaan = cabang aktif, atau "Semua cabang") → kartu ringkasan (transaksi selesai, total penjualan, total diskon, void, total per metode bayar) + tabel transaksi **20 baris per halaman** (« ‹ Hal x dari y › »). Ganti bulan/tahun/cabang = kembali ke halaman 1.
+- Batas bulan dihitung menurut **WIB** di SQL (`make_date(...)::timestamp at time zone 'Asia/Jakarta'`; JANGAN `timestamptz + interval '1 month'`, salah untuk Maret). Void tampil tapi tidak masuk total. Kasir/role satu cabang hanya melihat cabangnya (dipaksa server); cabang lain ditolak.
+- Klik baris = detail transaksi (`sale_detail`): cetak struk 80mm / nota A4, dan **void** (butuh hak `sales_void.u`; alasan wajib; stok kembali). Void memanggil `void_sale` yang sudah ada.
+- Belum: ekspor Excel/PDF rekap, rekap harian per kasir (tutup kasir), halaman Keuangan.
