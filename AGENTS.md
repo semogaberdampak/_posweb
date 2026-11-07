@@ -32,7 +32,7 @@ supabase/manual_migrations/013_stock_move.sql      fitur hak 'stock_move' (penga
 src/features/stock/StockMovePage.tsx        halaman /mutasi-stok: pilih cabang asal/tujuan, cari produk (server-side), daftar, satu tombol pindahkan (atomik)
 src/features/print/printing.ts              pengaturan cetak per KOMPUTER (localStorage), triggerPrint (anti-ganda), penjaga sekali-cetak
 scripts/kasir-kiosk.cmd                     membuka Chrome/Edge mode --kiosk-printing (cetak langsung ke printer default, tanpa dialog)
-deploy/htaccess.example                     contoh SPA fallback Apache untuk base /_posweb/
+deploy/htaccess.example                     contoh SPA fallback Apache bila di subfolder (VITE_BASE=/_posweb/); vercel.json di akar = SPA fallback + header keamanan untuk Vercel
 supabase/manual_migrations/012_sales_export.sql     RPC sales_export (semua transaksi + rincian barang sebulan, dicatat di audit_log)
 scripts/backup.mjs + scripts/lib/backup-core.mjs + scripts/schedule-backup.ps1   backup mandiri (npm run backup / backup:verify), jadwal harian Windows
 src/features/sales/exportXlsx.ts            pembuat Excel (3 sheet), dimuat lazy saat tombol "Unduh Excel" ditekan
@@ -170,12 +170,15 @@ Pemilik pindah ke agen lain karena kredit Claude gratis habis. Hal yang perlu di
 - Belum teruji pada printer/Windows pemilik. Ukuran kertas memakai `@page { size: <lebar>mm auto }`; pastikan ukuran roll 80mm diatur di driver printer.
 
 ## Penggabungan dengan compare.zip (7 Nov 2026)
-- Dipakai dari compare: `base: '/_posweb/'` di vite.config.ts (+ `BrowserRouter basename={import.meta.env.BASE_URL}` — di compare basename belum ada, rute akan rusak di subfolder), tambahan `.gitignore`.
+- Dari compare: `base: '/_posweb/'` — DIGANTI menjadi env `VITE_BASE` (bawaan `/`) karena produksi di Vercel (akar domain; base subfolder membuat aset 404). `BrowserRouter basename={import.meta.env.BASE_URL}` ditambahkan (di compare belum ada), tambahan `.gitignore`.
 - Mutasi stok: percobaan di compare (`stock-move/`, `005_stock_movements.sql`) digantikan `013` + `StockMovePage` baru. Alasan: (1) policy `mov_i` memberi INSERT langsung ke buku stok, (2) policy `mov_r` tanpa batas cabang, (3) transfer 4-arg tanpa kunci baris/ref_id, (4) halaman memuat semua produk (terpotong 1000 baris oleh PostgREST), non-atomik (loop per produk), memakai kelas warna di luar palet, dan tidak terpasang di rute. 013 membersihkan objek lama bila sudah terlanjur dijalankan.
 - `src/features/users/UsersRolesPage.tsx` di compare membuat `npm run build` GAGAL (mengimpor fungsi yang tidak ada di api.ts); sudah digantikan UsersPage + PermMatrix → tidak dibawa.
 - `20261107172300_user_permissions.sql` = salinan identik `005_user_permissions.sql` → dipakai nama 005 (idempoten; tidak perlu dijalankan ulang bila sudah).
-- Dev: http://localhost:5173/_posweb/ . Hosting statis butuh SPA fallback (lihat deploy/htaccess.example).
+- Dev: http://127.0.0.1:5173/ . Hosting statis butuh SPA fallback (lihat deploy/htaccess.example).
 
 ## Folder SQL: `supabase/manual_migrations/` (BUKAN `supabase/migrations/`)
 - SQL proyek ini dijalankan MANUAL di SQL Editor (schema.sql lalu 002…013). Folder bawaan CLI `supabase/migrations/` sengaja TIDAK dipakai: integrasi GitHub "Supabase Preview" menjalankan semua file di sana dari database kosong dan memakai angka di depan nama sebagai nomor versi (dua file berawalan `005` = galat `schema_migrations_pkey`, dan `schema.sql` bukan migrasi sehingga `002` gagal di database kosong). Dengan nama folder ini, integrasi mengabaikannya → Preview tidak lagi gagal dan tidak ada risiko migrasi otomatis ke produksi.
 - Jangan membuat berkas SQL bernomor ganda; jangan menaruh SQL di `supabase/migrations/` kecuali alur dipindah penuh ke Supabase CLI (butuh `001_schema.sql` + semua migrasi dibuat idempoten + `supabase migration repair` pada database produksi).
+
+## Berkas sisa yang harus tidak ada di repo (dari compare.zip / versi lama)
+`src/features/users/UsersRolesPage.tsx` (membuat `tsc`/build GAGAL di Vercel), folder `src/features/stock-move/`, `src/features/pos/Receipt.tsx`, folder `supabase/migrations/` (diganti `supabase/manual_migrations/`). Mengekstrak zip menimpa folder TIDAK menghapus berkas yang hanya ada di folder lama → hapus manual, lalu jalankan `npm run build` sebelum commit.
