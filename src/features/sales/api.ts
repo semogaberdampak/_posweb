@@ -35,3 +35,18 @@ export async function voidSale(id: string, reason: string) {
   const { error } = await supabase.rpc('void_sale', { p_sale: id, p_reason: reason.trim() })
   if (error) throw new Error(msg(error.message))
 }
+
+export type ExportSale = {
+  id: string; invoice_no: string; created_at: string; branch_name: string; cashier_name: string; payment_method: Method
+  subtotal: number; discount_amount: number; total: number; cash_received: number | null; change_amount: number | null
+  member_label: string | null; status: 'completed' | 'void'; void_reason: string | null
+}
+export type ExportItem = { sale_id: string; created_at: string; invoice_no: string; code: string; name: string; unit_price: number; qty: number; discount_pct: number; discount_amount: number; line_total: number }
+export type ExportData = { sales: ExportSale[]; items: ExportItem[] }
+
+/** Seluruh transaksi + rincian barang bulan itu (bukan hanya satu halaman). */
+export async function fetchExport(year: number, month: number, branchId: string | null): Promise<ExportData> {
+  const { data, error } = await supabase.rpc('sales_export', { p_year: year, p_month: month, p_branch: branchId, p_limit: 20000 })
+  if (error) throw new Error(msg(error.message))
+  return data as ExportData
+}

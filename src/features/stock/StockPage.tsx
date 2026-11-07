@@ -71,7 +71,7 @@ export default function StockPage() {
         {!sel ? <p className="text-text-muted">Pilih produk di kiri untuk melihat stok tiap cabang.</p> : (
           <>
             <div><div className="font-semibold">{sel.name}</div><div className="font-mono text-sm text-text-muted">{sel.code}</div></div>
-            {canEdit && <button className="btn-ghost w-full" onClick={() => setShowTransfer(true)}>Pindah stok antar cabang</button>}
+            {can('stock_move', 'u') && <button className="btn-ghost w-full" onClick={() => setShowTransfer(true)}>Pindah stok antar cabang</button>}
             <div className={`space-y-2 ${isFetching ? 'opacity-70' : ''}`}>
               {stocks.map((b) => (
                 <div key={b.branch_id} className={`flex items-center gap-2 rounded-2xl border p-3 ${b.branch_id === activeBranchId ? 'border-primary' : 'border-border-muted'}`}>

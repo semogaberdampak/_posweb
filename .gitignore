@@ -1,37 +1,19 @@
-# ============================================================
-# Dependencies and build outputs
-# ============================================================
-node_modules/
-dist/
-
-# ============================================================
-# Environment files
-# ============================================================
-# Ignore all .env files, but keep .env.example for reference
-.env*
+node_modules
+dist
+.env
+.env.*
 !.env.example
-# Uncomment to allow local overrides: *.env.local
-# !.env.local
-
-# ============================================================
-# Operating system files
-# ============================================================
-.DS_Store
-
-# ============================================================
-# SSL certificates and keys
-# ============================================================
 *.pem
 *.key
+.DS_Store
 
-# ============================================================
-# Business data files (Excel, CSV, import reports)
-# ============================================================
-# Ignore Excel files, CSV files, and import report directories
+# data bisnis & kunci rahasia impor
 *.xlsx
 *.xls
 *.csv
 import-report/
 .env.import
+backups/
 template_stok_cabang.csv
 pos-app.zip
+compare.zip

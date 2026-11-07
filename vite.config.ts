@@ -5,5 +5,5 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: { sourcemap: false }, // jangan publikasikan source map
-  base : '/_posweb/',
+  base: '/_posweb/', // aplikasi disajikan di subfolder /_posweb/ (dev: http://localhost:5173/_posweb/)
 })

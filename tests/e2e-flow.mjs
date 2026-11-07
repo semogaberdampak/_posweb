@@ -21,6 +21,7 @@ async function as(user, sql) {
   await db.exec(`set request.jwt.claim.sub='${user}'; set role authenticated;`)
   try { return await q(sql) } catch (e) { throw new Error(e.message) } finally { await db.exec('reset role;') } // pesan ringkas
 }
+const seq = async (items, fn) => { const o = []; for (const x of items) o.push(await fn(x)); return o } // berurutan: satu koneksi, klaim JWT global
 const err = async (user, sql) => { try { await as(user, sql); return null } catch (e) { return e.message } }
 
 // ---------- persiapan ----------
@@ -135,6 +136,23 @@ check('mutasi ke cabang yang sama ditolak', /sama/.test(await err(PENG, `select 
 check('kasir TIDAK bisa mutasi stok', /forbidden/.test(await err(KR.KRANGGAN, `select transfer_stock('${B.KRANGGAN}','${B.PAULUS}','${P[tc].id}', 1, null)`) ?? ''))
 await as(PENG, `select transfer_stock('${B.PAULUS}','${B.KRANGGAN}','${P[tc].id}', 1, 'ke tujuan baru')`)
 
+// mutasi banyak produk (atomik) + hak 'stock_move'
+const bc = [codes[50], codes[51], codes[52]], pq = {}
+for (const c of bc) pq[c] = [await stockAt(c, 'PUSAT'), await stockAt(c, 'PAULUS')]
+const bl = (arr) => lit(arr.map(([c, n]) => ({ product_id: P[c].id, qty: n })))
+const nb = (await as(PENG, `select transfer_stock_batch('${B.PUSAT}','${B.PAULUS}', ${bl(bc.map((c) => [c, 2]))}, 'kiriman') as n`))[0].n
+check('BATCH: 3 produk Pusat→Paulus sekaligus (hasil 3)', nb === 3)
+check('BATCH: stok asal -2 & tujuan +2 untuk tiap produk', (await Promise.all(bc.map(async (c) => (await stockAt(c, 'PUSAT')) === pq[c][0] - 2 && (await stockAt(c, 'PAULUS')) === pq[c][1] + 2))).every(Boolean))
+const snap = await Promise.all(bc.map((c) => stockAt(c, 'PUSAT')))
+check('BATCH ATOMIK: satu baris gagal (stok kurang) = SEMUA batal, tidak ada yang berpindah', /stok asal tidak cukup/.test(await err(PENG, `select transfer_stock_batch('${B.PUSAT}','${B.PAULUS}', ${bl([[bc[0], 1], [bc[1], 1], [bc[2], 99999]])}, null)`) ?? '') && JSON.stringify(await Promise.all(bc.map((c) => stockAt(c, 'PUSAT')))) === JSON.stringify(snap))
+check('BATCH: produk ganda ditolak', /produk ganda/.test(await err(PENG, `select transfer_stock_batch('${B.PUSAT}','${B.PAULUS}', ${bl([[bc[0], 1], [bc[0], 1]])}, null)`) ?? ''))
+check('BATCH: daftar kosong / >200 baris ditolak', /1-200/.test(await err(PENG, `select transfer_stock_batch('${B.PUSAT}','${B.PAULUS}', '[]'::jsonb, null)`) ?? '') && /1-200/.test(await err(PENG, `select transfer_stock_batch('${B.PUSAT}','${B.PAULUS}', ${lit(Array.from({ length: 201 }, (_, i) => ({ product_id: uid(900000 + i), qty: 1 })))}, null)`) ?? ''))
+check('BATCH: jumlah 0 / bukan angka ditolak', /tidak valid/.test(await err(PENG, `select transfer_stock_batch('${B.PUSAT}','${B.PAULUS}', ${bl([[bc[0], 0]])}, null)`) ?? '') && /tidak valid/.test(await err(PENG, `select transfer_stock_batch('${B.PUSAT}','${B.PAULUS}', ${lit([{ product_id: P[bc[0]].id, qty: '1; drop table stock' }])}, null)`) ?? ''))
+check('BATCH: kasir TIDAK bisa (tanpa hak stock_move)', /forbidden/.test(await err(KR.KRANGGAN, `select transfer_stock_batch('${B.KRANGGAN}','${B.PAULUS}', ${bl([[bc[0], 1]])}, null)`) ?? ''))
+const hk = (await seq([PENG, SA, KR.KRANGGAN, KABAG, KEU], async (u) => (await as(u, `select has_perm('stock_move','u') as p`))[0].p)).join()
+check('HAK stock_move: pengadaan & superadmin ya; kasir, kabag, keuangan tidak', hk === 'true,true,false,false,false', hk)
+check('BATCH: cabang asal = tujuan ditolak', /sama/.test(await err(PENG, `select transfer_stock_batch('${B.PUSAT}','${B.PUSAT}', ${bl([[bc[0], 1]])}, null)`) ?? ''))
+
 // mode "set" (stok opname via impor)
 const o = await imp(PENG, 'PAULUS', [{ code: codes[40], qty: 77 }], 'set')
 check('impor mode "set": stok ditimpa jadi 77, selisih tercatat', o.updated === 1 && (await stockAt(codes[40], 'PAULUS')) === 77)
@@ -145,7 +163,7 @@ await as(SA, `select save_print_template('invoice', ${cfgJson})`)
 check('FORMAT NOTA: superadmin bisa menyimpan', (await as(KR.KRANGGAN, `select config->>'title' t from print_templates where kind='invoice'`))[0]?.t === 'NOTA PENJUALAN')
 check('FORMAT NOTA: kasir bisa MEMBACA (perlu untuk mencetak)', (await as(KR.KRANGGAN, `select count(*)::int n from print_templates`))[0].n === 1)
 check('FORMAT NOTA: kasir TIDAK bisa menyimpan', /forbidden/.test(await err(KR.KRANGGAN, `select save_print_template('receipt', ${cfgJson})`) ?? ''))
-check('FORMAT NOTA: kabag/pengadaan/keuangan TIDAK bisa menyimpan', (await Promise.all([KABAG, PENG, KEU].map((u) => err(u, `select save_print_template('receipt', ${cfgJson})`)))).every((m) => /forbidden/.test(m ?? '')))
+check('FORMAT NOTA: kabag/pengadaan/keuangan TIDAK bisa menyimpan', (await seq([KABAG, PENG, KEU], (u) => err(u, `select save_print_template('receipt', ${cfgJson})`))).every((m) => /forbidden/.test(m ?? '')))
 check('FORMAT NOTA: kasir tidak bisa menulis tabel langsung', !!(await err(KR.KRANGGAN, `insert into print_templates(kind, config) values ('receipt','{}')`)) && !!(await err(KR.KRANGGAN, `update print_templates set config='{}'`)))
 check('FORMAT NOTA: jenis tidak valid / bukan objek / terlalu besar ditolak', /tidak valid/.test(await err(SA, `select save_print_template('lain', ${cfgJson})`) ?? '') && /tidak valid/.test(await err(SA, `select save_print_template('receipt', '[1]'::jsonb)`) ?? '') && /terlalu besar/.test(await err(SA, `select save_print_template('receipt', ${lit({ x: 'a'.repeat(21000) })})`) ?? ''))
 await as(SA, `select save_print_template('invoice', ${lit({ title: 'NOTA V2' })})`)
@@ -162,7 +180,7 @@ const rcK = await rc(KR.KRANGGAN, nowYM.y, nowYM.m, null)
 const dbK = (await q(`select count(*)::int n from sales where branch_id='${B.KRANGGAN}'`))[0].n
 check('REKAP: kasir hanya melihat cabangnya (tanpa memilih cabang)', rcK.total_rows === dbK && rcK.rows.every((r) => r.branch_name === 'Takom Kranggan'), `${rcK.total_rows} vs ${dbK}`)
 check('REKAP: kasir TIDAK bisa membuka cabang lain', /forbidden/.test(await err(KR.KRANGGAN, `select sales_recap(${nowYM.y},${nowYM.m},'${B.PAULUS}',1,20)`) ?? ''))
-check('REKAP: parameter tidak valid ditolak (bulan 13, halaman 0, ukuran 500)', (await Promise.all([`13,null,1,20`, `1,null,0,20`, `1,null,1,500`].map((a) => err(SA, `select sales_recap(${nowYM.y},${a})`)))).every((m) => /tidak valid/.test(m ?? '')))
+check('REKAP: parameter tidak valid ditolak (bulan 13, halaman 0, ukuran 500)', (await seq([`13,null,1,20`, `1,null,0,20`, `1,null,1,500`], (a) => err(SA, `select sales_recap(${nowYM.y},${a})`))).every((m) => /tidak valid/.test(m ?? '')))
 check('REKAP: role tanpa hak sales_recap (pengadaan) ditolak', /forbidden/.test(await err(PENG, `select sales_recap(${nowYM.y},${nowYM.m},null,1,20)`) ?? ''))
 // paginasi: ukuran 5 -> semua halaman digabung = semua transaksi, tanpa duplikat, urut terbaru dulu
 const pages = Math.ceil(rcAll.total_rows / 5), ids = [], times = []
@@ -184,6 +202,20 @@ check('DETAIL: invoice, item, dan jumlah line_total = total', det.invoice_no ===
 const otherSale = (await q(`select id from sales where branch_id='${B.PAULUS}' limit 1`))[0].id
 check('DETAIL: kasir TIDAK bisa membuka transaksi cabang lain', /tidak ditemukan/.test(await err(KR.KRANGGAN, `select sale_detail('${otherSale}')`) ?? ''))
 
+// ---------- ekspor rekap ----------
+const ex = async (u, y, m, br, lim = 20000) => (await as(u, `select sales_export(${y},${m},${br ? `'${B[br]}'` : 'null'},${lim}) as r`))[0].r
+const exAll = await ex(SA, nowYM.y, nowYM.m, null), rcNow = await rc(SA, nowYM.y, nowYM.m, null)
+check('EKSPOR: jumlah transaksi = rekap bulan itu (seluruh halaman, bukan 20 baris)', exAll.sales.length === rcNow.total_rows, `${exAll.sales.length} vs ${rcNow.total_rows}`)
+check('EKSPOR: jumlah rincian barang = baris sale_items bulan itu', exAll.items.length === (await q(`select count(*)::int n from sale_items i join sales s on s.id=i.sale_id where s.created_at >= date_trunc('month', now() at time zone 'Asia/Jakarta') at time zone 'Asia/Jakarta'`))[0].n)
+check('EKSPOR: total transaksi selesai = ringkasan rekap', exAll.sales.filter((x) => x.status === 'completed').reduce((a, x) => a + x.total, 0) === rcNow.summary.total)
+check('EKSPOR: tiap item terhubung ke transaksinya & jumlah per transaksi cocok', exAll.sales.every((x) => exAll.items.filter((i) => i.sale_id === x.id).reduce((a, i) => a + i.line_total, 0) === x.total))
+const exK = await ex(KR.KRANGGAN, nowYM.y, nowYM.m, null)
+check('EKSPOR: kasir hanya memperoleh cabangnya', exK.sales.length > 0 && exK.sales.every((x) => x.branch_name === 'Takom Kranggan'))
+check('EKSPOR: kasir TIDAK bisa mengekspor cabang lain', /forbidden/.test(await err(KR.KRANGGAN, `select sales_export(${nowYM.y},${nowYM.m},'${B.PAULUS}')`) ?? ''))
+check('EKSPOR: role tanpa hak rekap ditolak', /forbidden/.test(await err(PENG, `select sales_export(${nowYM.y},${nowYM.m},null)`) ?? ''))
+check('EKSPOR: melebihi batas baris ditolak dengan pesan jelas', /terlalu banyak transaksi/.test(await err(SA, `select sales_export(${nowYM.y},${nowYM.m},null,1)`) ?? ''))
+check('EKSPOR: setiap unduhan tercatat di audit log', (await q(`select count(*)::int n from audit_log where action='sales.export'`))[0].n >= 2)
+
 // ---------- keutuhan ----------
 console.log('')
 const mism = await q(`select s.branch_id, s.product_id, s.qty, coalesce(m.t,0)::int t from stock s left join (select branch_id, product_id, sum(qty_change) t from stock_movements group by 1,2) m using (branch_id, product_id) where s.qty <> coalesce(m.t,0)`)
@@ -200,7 +232,7 @@ const mv = await q(`select coalesce(sum(qty_change) filter (where reason in ('sa
 check('KEUTUHAN: pergerakan "sale"+"void" = -(jumlah barang terjual yang sah)', mv[0].n === -sold[0].n, `${mv[0].n} vs ${-sold[0].n}`)
 const transferNet = await q(`select coalesce(sum(qty_change) filter (where reason in ('transfer_in','transfer_out')),0)::int n from stock_movements`)
 check('KEUTUHAN: mutasi stok tidak mengubah total global (net 0)', transferNet[0].n === 0)
-const au = await q(`select count(*)::int n from audit_log where action in ('sale.create','sale.void','stock.import','stock.transfer','stock.set','print_template.save')`)
+const au = await q(`select count(*)::int n from audit_log where action in ('sale.create','sale.void','stock.import','stock.transfer','stock.set','print_template.save','sales.export')`)
 check('audit log mencatat penjualan/void/impor/mutasi', au[0].n > 0, String(au[0].n))
 
 console.log(`\nHASIL: ${pass} lulus, ${fail} gagal`)

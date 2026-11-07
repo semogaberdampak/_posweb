@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { rupiah } from '../../shared/format'
 import { useAuth } from '../auth/AuthProvider'
 import { listBranches } from '../users/api'
-import { fetchRecap, PAGE_SIZE } from './api'
+import { fetchExport, fetchRecap, PAGE_SIZE } from './api'
 import { fmtTime, SaleDetailModal } from './SaleDetailModal'
 
 const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
@@ -18,6 +18,7 @@ export default function SalesRecapPage() {
   const [branch, setBranch] = useState<string>(allBranches ? (activeBranchId ?? 'all') : 'all') // 'all' = semua cabang yang boleh dilihat
   const [page, setPage] = useState(1)
   const [openId, setOpenId] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false); const [exportErr, setExportErr] = useState('')
   const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: listBranches, enabled: allBranches })
   const years = Array.from({ length: Math.max(now.getFullYear(), year) - FIRST_YEAR + 1 }, (_, i) => FIRST_YEAR + i).reverse()
   const branchArg = allBranches && branch !== 'all' ? branch : null
@@ -35,6 +36,17 @@ export default function SalesRecapPage() {
   const to = data ? Math.min(page * PAGE_SIZE, data.total_rows) : 0
   const showBranch = allBranches && branch === 'all'
   const branchLabel = allBranches ? (branch === 'all' ? 'Semua cabang' : branches.find((b) => b.id === branch)?.name ?? '') : profile?.branch_name ?? ''
+
+  async function exportXlsx() {
+    setExporting(true); setExportErr('')
+    try {
+      const [d, x] = await Promise.all([fetchExport(year, month, branchArg), import('./exportXlsx')]) // library Excel baru dimuat saat tombol ditekan
+      const buf = await x.buildRecapWorkbook(d, { year, month, branchLabel, generatedBy: profile?.full_name ?? 'POS' })
+      const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+      const a = document.createElement('a'); a.href = url; a.download = x.exportFileName(year, month, branchLabel); a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+    } catch (e) { setExportErr(e instanceof Error ? e.message : 'Gagal membuat file Excel.') } finally { setExporting(false) }
+  }
 
   return (
     <>
@@ -54,7 +66,9 @@ export default function SalesRecapPage() {
             </select>
           </label>
         )}
+        <button className="btn-ghost" disabled={exporting || !data || data.total_rows === 0} onClick={exportXlsx}>{exporting ? 'Menyiapkan…' : 'Unduh Excel'}</button>
       </div>
+      {exportErr && <p role="alert" className="mb-3 text-danger">{exportErr}</p>}
       <p className="mb-3 text-sm text-text-muted">{MONTHS[month - 1]} {year} · {branchLabel} · waktu WIB</p>
       {error && <p role="alert" className="mb-3 text-danger">{error instanceof Error ? error.message : 'Gagal memuat rekap.'}</p>}
 

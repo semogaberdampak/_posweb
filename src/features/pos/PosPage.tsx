@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createSale, searchProducts } from './api'
 import { PrintSheet } from '../print/views'
+import { createPrintGuard, triggerPrint, usePrintPrefs } from '../print/printing'
 import { useInvoiceCfg, useReceiptCfg, type PrintData } from '../print/templates'
 import { listBranches } from '../users/api'
 import { StockByBranch } from '../stock/StockByBranch'
@@ -36,6 +37,8 @@ export default function PosPage() {
   const [done, setDone] = useState<Done | null>(null)
   const qc = useQueryClient()
   const [printKind, setPrintKind] = useState<'receipt' | 'invoice'>('receipt')
+  const { autoPrint, thermalOnly } = usePrintPrefs()
+  const printGuard = useRef(createPrintGuard())
   const receiptCfg = useReceiptCfg(), invoiceCfg = useInvoiceCfg() // dimuat sejak halaman dibuka agar siap saat cetak
   const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: listBranches })
   const { activeBranchId, allBranches, profile } = useAuth()
@@ -63,9 +66,9 @@ export default function PosPage() {
   useEffect(() => { document.querySelector(`[data-row="${cursor}"]`)?.scrollIntoView({ block: 'nearest' }) }, [cursor])
   useEffect(() => {
     if (!done) return
-    setPrintKind('receipt') // struk 80mm otomatis; nota A4 lewat tombol
-    const t = setTimeout(() => window.print(), 200)
-    return () => clearTimeout(t)
+    if (!autoPrint) return // pengaturan komputer ini: cetak otomatis dimatikan
+    setPrintKind('receipt') // otomatis hanya struk 80mm; nota A4 lewat tombol
+    return triggerPrint({ shouldPrint: () => printGuard.current.once(done.sale.invoice_no) })
   }, [done])
 
   function add(p: Product) {
@@ -112,7 +115,7 @@ export default function PosPage() {
       setError(e instanceof Error ? e.message : 'Transaksi gagal')
     } finally { setBusy(false) }
   }
-  function printAgain(k: 'receipt' | 'invoice') { setPrintKind(k); setTimeout(() => window.print(), 200) }
+  function printAgain(k: 'receipt' | 'invoice') { setPrintKind(k); triggerPrint() }
   function printData(d: Done): PrintData {
     const bid = activeBranchId ?? profile?.branch_id
     return {
@@ -165,7 +168,7 @@ export default function PosPage() {
               {done.sale.invoice_no} tersimpan · Total {rupiah(done.sale.total)}
               {done.method === 'cash' && <b> · Kembalian {rupiah(done.sale.change)}</b>}
               <button className="btn-ghost ml-3 !py-1" onClick={() => printAgain('receipt')}>Cetak ulang struk</button>
-              <button className="btn-ghost ml-2 !py-1" onClick={() => printAgain('invoice')}>Cetak nota A4</button>
+              {!thermalOnly && <button className="btn-ghost ml-2 !py-1" onClick={() => printAgain('invoice')}>Cetak nota A4</button>}
             </div>
           )}
           <input ref={searchRef} className="input" placeholder="Scan barcode / cari kode atau nama produk (F2)" value={q}

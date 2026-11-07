@@ -28,6 +28,14 @@ supabase/migrations/010_print_templates.sql  tabel print_templates (baca: semua 
 src/features/print/                         templates.ts (bawaan = nota lama TAKOM, merge aman, token), views.tsx (ReceiptView 80mm, InvoiceView A4, PrintSheet), FormatNotaPage.tsx (editor admin /format-nota)
 supabase/migrations/011_sales_recap.sql     RPC sales_recap (bulan/tahun WIB, cabang, halaman 20) + sale_detail (untuk detail & cetak ulang)
 src/features/sales/                         SalesRecapPage (filter bulan/tahun/cabang, kartu ringkasan, tabel 20 baris/halaman), SaleDetailModal (detail, cetak struk/A4, void), api.ts
+supabase/migrations/013_stock_move.sql      fitur hak 'stock_move' (pengadaan+superadmin), transfer_stock (5 arg, cek stock_move.u), transfer_stock_batch (atomik), pembersihan sisa percobaan lama
+src/features/stock/StockMovePage.tsx        halaman /mutasi-stok: pilih cabang asal/tujuan, cari produk (server-side), daftar, satu tombol pindahkan (atomik)
+src/features/print/printing.ts              pengaturan cetak per KOMPUTER (localStorage), triggerPrint (anti-ganda), penjaga sekali-cetak
+scripts/kasir-kiosk.cmd                     membuka Chrome/Edge mode --kiosk-printing (cetak langsung ke printer default, tanpa dialog)
+deploy/htaccess.example                     contoh SPA fallback Apache untuk base /_posweb/
+supabase/migrations/012_sales_export.sql     RPC sales_export (semua transaksi + rincian barang sebulan, dicatat di audit_log)
+scripts/backup.mjs + scripts/lib/backup-core.mjs + scripts/schedule-backup.ps1   backup mandiri (npm run backup / backup:verify), jadwal harian Windows
+src/features/sales/exportXlsx.ts            pembuat Excel (3 sheet), dimuat lazy saat tombol "Unduh Excel" ditekan
 supabase/checks/integritas_stok.sql         pemeriksaan keutuhan (baca saja): stok = riwayat, tanpa minus, total transaksi cocok
 supabase/functions/reset-password/index.ts  Edge Function: HANYA superadmin mereset kata sandi user mana pun
 supabase/functions/create-user/index.ts     Edge Function pembuat akun login+profil (service_role di sisi Supabase)
@@ -104,10 +112,10 @@ Ide role tambahan yang sudah didiskusikan (belum dibuat): supervisor kasir, guda
 - Impor: `npm run import:products -- file.xlsx --dry-run` lalu tanpa `--dry-run`. Default produk yang sudah ada DILEWATI (tidak menimpa harga yang diubah di aplikasi); `--update` menimpa. Stok awal: `--stock-branch=KODE` (hanya mengisi stok yang belum ada).
 
 ## 8. Cara menjalankan
-1. Supabase SQL Editor (role `postgres`): jalankan `schema.sql` lalu `migrations/002` → `003` → `004` → `005` → `006` → `007` → `008` → `009` → `010` → `011` berurutan. Setelah 005, pasang Edge Function `create-user` dan `reset-password` (Supabase → Edge Functions → Deploy a new function → Via Editor, nama `create-user`, tempel isi `supabase/functions/create-user/index.ts`; biarkan Verify JWT aktif; opsional secret `ALLOWED_ORIGIN` = alamat web aplikasi). Fungsi ini BELUM diuji di Supabase.
+1. Supabase SQL Editor (role `postgres`): jalankan `schema.sql` lalu `migrations/002` → `003` → `004` → `005` → `006` → `007` → `008` → `009` → `010` → `011` → `012` → `013` berurutan. Setelah 005, pasang Edge Function `create-user` dan `reset-password` (Supabase → Edge Functions → Deploy a new function → Via Editor, nama `create-user`, tempel isi `supabase/functions/create-user/index.ts`; biarkan Verify JWT aktif; opsional secret `ALLOWED_ORIGIN` = alamat web aplikasi). Fungsi ini BELUM diuji di Supabase.
 2. Buat user di Authentication → Users (centang Auto Confirm), lalu isi `profiles` dengan SQL (lihat README). User tanpa baris `profiles` aktif akan langsung dikeluarkan oleh aplikasi.
 3. `.env` dari `.env.example` (URL + anon key). `.env.import` dari `.env.import.example` (hanya untuk skrip impor, di komputer pemilik).
-4. `npm install` → `npm run dev` (http://localhost:5173). Cek: `npx tsc --noEmit`, `npm run build`, `npm run test:sql`, `npm run test:e2e`, `npm run test:csv`, `npm run test:print`. Jalankan semua tes setiap mengubah SQL atau alur penjualan/stok; tambahkan kasus baru bila ada fitur baru.
+4. `npm install` → `npm run dev` (http://localhost:5173). Cek: `npx tsc --noEmit`, `npm run build`, `npm run test:sql`, `npm run test:e2e`, `npm run test:csv`, `npm run test:print`, `npm run test:backup`, `npm run test:xlsx`, `npm run test:printing`, `npm run test:merge`. Jalankan semua tes setiap mengubah SQL atau alur penjualan/stok; tambahkan kasus baru bila ada fitur baru.
 Catatan lingkungan: shell sandbox kadang `sh` (tanpa brace expansion). Tailwind v4: jangan `@apply` kelas kustom; pakai `@utility`.
 
 ## 9. Status
@@ -146,4 +154,24 @@ Pemilik pindah ke agen lain karena kredit Claude gratis habis. Hal yang perlu di
 - Alur: pilih **Bulan** → pilih **Tahun** (→ pilih **Cabang** bagi role lintas cabang; bawaan = cabang aktif, atau "Semua cabang") → kartu ringkasan (transaksi selesai, total penjualan, total diskon, void, total per metode bayar) + tabel transaksi **20 baris per halaman** (« ‹ Hal x dari y › »). Ganti bulan/tahun/cabang = kembali ke halaman 1.
 - Batas bulan dihitung menurut **WIB** di SQL (`make_date(...)::timestamp at time zone 'Asia/Jakarta'`; JANGAN `timestamptz + interval '1 month'`, salah untuk Maret). Void tampil tapi tidak masuk total. Kasir/role satu cabang hanya melihat cabangnya (dipaksa server); cabang lain ditolak.
 - Klik baris = detail transaksi (`sale_detail`): cetak struk 80mm / nota A4, dan **void** (butuh hak `sales_void.u`; alasan wajib; stok kembali). Void memanggil `void_sale` yang sudah ada.
-- Belum: ekspor Excel/PDF rekap, rekap harian per kasir (tutup kasir), halaman Keuangan.
+- **Unduh Excel** (migrasi 012): seluruh transaksi bulan/cabang terpilih (bukan hanya halaman aktif): sheet Ringkasan (total, per metode, per cabang, per hari; void tidak ikut total), Transaksi, Rincian Barang. Waktu WIB sebagai teks, angka sebagai angka, kode barang & teks sebagai TEKS (aman dari injeksi rumus Excel). Batas 20.000 transaksi (pilih satu cabang bila lebih).
+- Belum: ekspor PDF, rekap harian per kasir (tutup kasir), halaman Keuangan.
+
+## Backup mandiri (Supabase gratis tidak punya backup otomatis)
+- `npm run backup` (opsi `--out=DIR --keep=14`) membaca 16 tabel + daftar akun (TANPA kata sandi) lewat API (kunci service_role di `.env.import`) → `backups/pos-TAHUNBULANTANGGAL-JAMMENITDETIK/*.jsonl.gz` + `manifest.json` (jumlah baris & SHA-256). Ditulis ke folder sementara lalu di-rename: backup yang gagal tidak meninggalkan folder setengah jadi; backup lama aman. Retensi: hanya folder `pos-*` ber-manifest yang dihapus (default simpan 14). Hasil dicatat di `backups/backup.log`.
+- `npm run backup:verify [-- folder]` memeriksa sidik jari, gunzip, JSON valid, jumlah baris. Backup otomatis diverifikasi setelah selesai.
+- Terjadwal Windows: `powershell -ExecutionPolicy Bypass -File scripts\schedule-backup.ps1` (harian 22:00, jalan susulan bila PC mati; akun harus login). **Belum diuji di Windows pemilik.**
+- **Pemulihan (restore) BELUM dibuat.** Kolom `id` tabel pergerakan/baris transaksi/audit bertipe `generated always` sehingga tidak bisa diisi ulang lewat REST apa adanya, dan akun login (auth.users) tidak ikut kata sandinya. Skrip restore harus dirancang & diuji di proyek Supabase cadangan sebelum dipercaya. Alternatif penuh: `pg_dump` ke connection string database (butuh PostgreSQL client).
+- Data backup berisi harga beli & nama pegawai: simpan di folder yang terlindungi; salin ke flashdisk/cloud pribadi.
+
+## Cetak otomatis & cetak ulang ke printer thermal
+- Pengaturan per KOMPUTER (localStorage, halaman Pengaturan → "Printer struk"): *Cetak struk otomatis* (bawaan nyala) dan *hanya printer thermal* (menyembunyikan tombol nota A4). Setelah transaksi selesai, struk 80mm tercetak otomatis sekali (penjaga per nomor nota; aman terhadap StrictMode); "Cetak ulang struk (thermal)" ada di banner kasir & detail transaksi Rekap; "Cetak struk contoh" untuk uji printer.
+- Browser TIDAK bisa memilih printer atau mencetak diam-diam sendiri. Cara kerja: printer thermal dijadikan **printer default Windows**, aplikasi dibuka lewat `scripts\kasir-kiosk.cmd` (Chrome/Edge `--kiosk-printing`, profil terpisah) sehingga `window.print()` langsung ke printer default tanpa dialog. Tanpa itu dialog cetak tetap muncul. Karena kiosk-printing tanpa dialog, nota A4 dicetak dari komputer lain (browser biasa).
+- Belum teruji pada printer/Windows pemilik. Ukuran kertas memakai `@page { size: <lebar>mm auto }`; pastikan ukuran roll 80mm diatur di driver printer.
+
+## Penggabungan dengan compare.zip (7 Nov 2026)
+- Dipakai dari compare: `base: '/_posweb/'` di vite.config.ts (+ `BrowserRouter basename={import.meta.env.BASE_URL}` — di compare basename belum ada, rute akan rusak di subfolder), tambahan `.gitignore`.
+- Mutasi stok: percobaan di compare (`stock-move/`, `005_stock_movements.sql`) digantikan `013` + `StockMovePage` baru. Alasan: (1) policy `mov_i` memberi INSERT langsung ke buku stok, (2) policy `mov_r` tanpa batas cabang, (3) transfer 4-arg tanpa kunci baris/ref_id, (4) halaman memuat semua produk (terpotong 1000 baris oleh PostgREST), non-atomik (loop per produk), memakai kelas warna di luar palet, dan tidak terpasang di rute. 013 membersihkan objek lama bila sudah terlanjur dijalankan.
+- `src/features/users/UsersRolesPage.tsx` di compare membuat `npm run build` GAGAL (mengimpor fungsi yang tidak ada di api.ts); sudah digantikan UsersPage + PermMatrix → tidak dibawa.
+- `20261107172300_user_permissions.sql` = salinan identik `005_user_permissions.sql` → dipakai nama 005 (idempoten; tidak perlu dijalankan ulang bila sudah).
+- Dev: http://localhost:5173/_posweb/ . Hosting statis butuh SPA fallback (lihat deploy/htaccess.example).

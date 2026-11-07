@@ -4,6 +4,7 @@ import { Modal } from '../../shared/Modal'
 import { rupiah } from '../../shared/format'
 import { useAuth } from '../auth/AuthProvider'
 import { PrintSheet } from '../print/views'
+import { triggerPrint, usePrintPrefs } from '../print/printing'
 import { useInvoiceCfg, useReceiptCfg, type PrintData } from '../print/templates'
 import { fetchSaleDetail, voidSale, type SaleDetail } from './api'
 
@@ -23,10 +24,11 @@ export function SaleDetailModal({ id, onClose }: { id: string; onClose: () => vo
   const { data: d, error, isLoading } = useQuery({ queryKey: ['sale-detail', id], queryFn: () => fetchSaleDetail(id) })
   const receipt = useReceiptCfg(), invoice = useInvoiceCfg()
   const [kind, setKind] = useState<'receipt' | 'invoice'>('receipt')
+  const { thermalOnly } = usePrintPrefs()
   const [voiding, setVoiding] = useState(false); const [reason, setReason] = useState('')
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false)
 
-  const printNow = (k: 'receipt' | 'invoice') => { setKind(k); setTimeout(() => window.print(), 200) }
+  const printNow = (k: 'receipt' | 'invoice') => { setKind(k); triggerPrint() }
   async function doVoid() {
     if (!reason.trim()) return setErr('Alasan wajib diisi.')
     setBusy(true); setErr('')
@@ -74,8 +76,8 @@ export function SaleDetailModal({ id, onClose }: { id: string; onClose: () => vo
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
-                <button className="btn-primary" onClick={() => printNow('receipt')}>Cetak struk 80mm</button>
-                <button className="btn-ghost" onClick={() => printNow('invoice')}>Cetak nota A4</button>
+                <button className="btn-primary" onClick={() => printNow('receipt')}>Cetak ulang struk (thermal)</button>
+                {!thermalOnly && <button className="btn-ghost" onClick={() => printNow('invoice')}>Cetak nota A4</button>}
                 {d.status === 'completed' && can('sales_void', 'u') && <button className="btn-ghost ml-auto text-danger" onClick={() => setVoiding(true)}>Batalkan transaksi (void)</button>}
               </div>
             )}

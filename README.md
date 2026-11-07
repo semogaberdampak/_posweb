@@ -27,7 +27,7 @@ Fitur baru = folder baru + 1 baris di tabel `features` (SQL) + 1 route di `App.t
 Kolom Excel: A kode, B nama, O harga, AK pengarang; kolom lain tersimpan di `attributes` dan tampil sebagai card.
 
 ## Urutan migrasi database
-`schema.sql` → `migrations/002_products_import.sql` → `003_costs_and_line_discount.sql` → `004_stock_views.sql` → `005_user_permissions.sql` → `006_email_domain.sql` → `007_revoke_sessions.sql` → `008_active_branch.sql` → `009_stock_tools.sql` → `010_print_templates.sql` → `011_sales_recap.sql`
+`schema.sql` → `migrations/002_products_import.sql` → `003_costs_and_line_discount.sql` → `004_stock_views.sql` → `005_user_permissions.sql` → `006_email_domain.sql` → `007_revoke_sessions.sql` → `008_active_branch.sql` → `009_stock_tools.sql` → `010_print_templates.sql` → `011_sales_recap.sql` → `012_sales_export.sql` → `013_stock_move.sql`
 (003: harga beli dipindah ke tabel rahasia `product_costs`, dan diskon per produk).
 
 ## Stok awal dari Excel (kolom stokOnHand)
@@ -45,3 +45,8 @@ Setelah migrasi 005, pasang Edge Function `supabase/functions/create-user` (liha
 
 ## Tes
 `npm run test:sql` (SQL), `npm run test:e2e` (alur 7 cabang lengkap), `npm run test:csv` (pembaca CSV stok), `npm run test:print` (format cetak). Pemeriksaan data nyata: `supabase/checks/integritas_stok.sql`.
+
+## Backup
+`npm run backup`, `npm run backup:verify`, jadwal: `scripts/schedule-backup.ps1`. Lihat AGENTS.md bagian Backup.
+
+Catatan: aplikasi dilayani di subfolder `/_posweb/` (dev: http://localhost:5173/_posweb/). Tes tambahan: `npm run test:printing`, `npm run test:merge`.
