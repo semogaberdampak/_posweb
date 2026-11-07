@@ -3,7 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main # atau 'master', sesuaikan dengan nama branch utama Anda
+      - main # Sesuaikan jika nama branch utama Anda 'master'
 
 permissions:
   contents: read
@@ -25,14 +25,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
-        working-directory: pos-app
 
       - name: Build project
         run: npm run build
-        working-directory: pos-app
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
@@ -43,7 +42,7 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: pos-app/dist
+          path: dist
 
       - name: Deploy to GitHub Pages
         id: deployment
