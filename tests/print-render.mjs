@@ -13,6 +13,11 @@ fs.writeFileSync(entry, `export * from '${ROOT}/src/features/print/views'; expor
 await build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'cjs', outfile: out, external: ['react', 'react-dom', 'react/jsx-runtime'], jsx: 'automatic',
   nodePaths: [path.join(ROOT, 'node_modules')], define: { 'import.meta.env.VITE_SUPABASE_URL': '"https://x.supabase.co"', 'import.meta.env.VITE_SUPABASE_ANON_KEY': '"x"' }, logLevel: 'silent' })
 const require = createRequire(path.join(ROOT, 'package.json'))
+// Di Node < 22 tidak ada WebSocket global; supabase-js (diimpor templates.ts via lib/supabase)
+// melempar galat saat createClient. Sediakan polyfill dari paket `ws` agar uji bisa jalan.
+if (typeof globalThis.WebSocket === 'undefined') {
+  try { globalThis.WebSocket = require('ws') } catch { /* abaikan, akan gagal dengan pesan jelas */ }
+}
 const { renderToStaticMarkup } = require('react-dom/server'), React = require('react')
 const M = require(out)
 let ok = 0, bad = 0
