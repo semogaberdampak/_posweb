@@ -5,4 +5,5 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: { sourcemap: false }, // jangan publikasikan source map
+  base : '/_posweb/',
 })
