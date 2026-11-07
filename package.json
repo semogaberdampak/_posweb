@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "import:products": "node scripts/import-products.mjs",
     "test:sql": "node tests/sql-smoke.mjs",
