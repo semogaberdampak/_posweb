@@ -33,7 +33,7 @@ await db.exec(`
  grant usage on schema public to anon, authenticated; grant usage on schema auth to authenticated;
  grant execute on function auth.uid() to anon, authenticated;`)
 await db.exec(sqlFile('supabase/schema.sql'))
-for (const f of fs.readdirSync(path.join(ROOT, 'supabase/migrations')).sort()) await db.exec(sqlFile('supabase/migrations/' + f))
+for (const f of fs.readdirSync(path.join(ROOT, 'supabase/manual_migrations')).sort()) await db.exec(sqlFile('supabase/manual_migrations/' + f))
 
 await db.exec(`
  update branches set name='Takom Pusat' where code='PUSAT';

@@ -20,14 +20,14 @@ Fitur baru = folder baru + 1 baris di tabel `features` (SQL) + 1 route di `App.t
 - Produksi: pasang header CSP/HSTS di hosting, aktifkan MFA dan matikan sign-up publik di Supabase Auth.
 
 ## Impor produk dari Excel (sekali jalan)
-1. SQL Editor → jalankan `supabase/migrations/002_products_import.sql`.
+1. SQL Editor → jalankan `supabase/manual_migrations/002_products_import.sql`.
 2. Salin `.env.import.example` → `.env.import`, isi `SUPABASE_URL` dan `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → API). File ini TIDAK ikut Git.
 3. Uji coba: `npm run import:products -- database.xlsx --dry-run` (cek `import-report/`).
 4. Impor: `npm run import:products -- database.xlsx` (produk yang sudah ada dilewati; `--update` untuk menimpa).
 Kolom Excel: A kode, B nama, O harga, AK pengarang; kolom lain tersimpan di `attributes` dan tampil sebagai card.
 
 ## Urutan migrasi database
-`schema.sql` → `migrations/002_products_import.sql` → `003_costs_and_line_discount.sql` → `004_stock_views.sql` → `005_user_permissions.sql` → `006_email_domain.sql` → `007_revoke_sessions.sql` → `008_active_branch.sql` → `009_stock_tools.sql` → `010_print_templates.sql` → `011_sales_recap.sql` → `012_sales_export.sql` → `013_stock_move.sql`
+`schema.sql` → `manual_migrations/002_products_import.sql` → `003_costs_and_line_discount.sql` → `004_stock_views.sql` → `005_user_permissions.sql` → `006_email_domain.sql` → `007_revoke_sessions.sql` → `008_active_branch.sql` → `009_stock_tools.sql` → `010_print_templates.sql` → `011_sales_recap.sql` → `012_sales_export.sql` → `013_stock_move.sql`
 (003: harga beli dipindah ke tabel rahasia `product_costs`, dan diskon per produk).
 
 ## Stok awal dari Excel (kolom stokOnHand)

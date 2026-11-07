@@ -16,7 +16,7 @@ await run('stub supabase', `
  grant usage on schema public to anon, authenticated; grant usage on schema auth to authenticated;
  grant execute on function auth.uid() to anon, authenticated;`)
 await run('schema.sql', sql('supabase/schema.sql'))
-await run('002', sql('supabase/migrations/002_products_import.sql'))
+await run('002', sql('supabase/manual_migrations/002_products_import.sql'))
 // data lama seperti hasil impor 002 (masih ada Price1 di attributes)
 await run('seed', `
  insert into auth.users values ('00000000-0000-0000-0000-000000000001'),('00000000-0000-0000-0000-000000000002'),('00000000-0000-0000-0000-000000000003');
@@ -27,13 +27,13 @@ await run('seed', `
   ('A1','Buku A',10000,'X','[{"k":"Divisi Id","v":1},{"k":"Price1","v":6000},{"k":"lastCost","v":5000},{"k":"prod ISBN","v":"979"}]'),
   ('B2','Buku B',5000,null,'[{"k":"prod ISBN","v":"978"}]');
  insert into stock select (select id from branches where code='PUSAT'), id, 10 from products;`)
-await run('003', sql('supabase/migrations/003_costs_and_line_discount.sql'))
-await run('003 ulang (idempoten)', sql('supabase/migrations/003_costs_and_line_discount.sql'))
+await run('003', sql('supabase/manual_migrations/003_costs_and_line_discount.sql'))
+await run('003 ulang (idempoten)', sql('supabase/manual_migrations/003_costs_and_line_discount.sql'))
 
-await run('004', sql('supabase/migrations/004_stock_views.sql'))
-await run('004 ulang', sql('supabase/migrations/004_stock_views.sql'))
-await run('005', sql('supabase/migrations/005_user_permissions.sql'))
-await run('005 ulang', sql('supabase/migrations/005_user_permissions.sql'))
+await run('004', sql('supabase/manual_migrations/004_stock_views.sql'))
+await run('004 ulang', sql('supabase/manual_migrations/004_stock_views.sql'))
+await run('005', sql('supabase/manual_migrations/005_user_permissions.sql'))
+await run('005 ulang', sql('supabase/manual_migrations/005_user_permissions.sql'))
 const q = async (sql) => (await db.query(sql)).rows
 console.log('A1 attributes setelah migrasi:', JSON.stringify((await q(`select attributes from products where code='A1'`))[0].attributes))
 console.log('costs A1:', JSON.stringify((await q(`select c.attributes from product_costs c join products p on p.id=c.product_id where p.code='A1'`))[0].attributes))
@@ -99,8 +99,8 @@ console.log('list_users superadmin / kasir           :', (await as(5,'select * f
 console.log('buat role baru oleh superadmin          :', await call(5, `select create_role('supervisor kasir','approve void',false)`), '| role sama lagi:', await call(5, `select create_role('supervisor kasir','x',false)`))
 
 // ===== uji 006: domain email =====
-await run('006', sql('supabase/migrations/006_email_domain.sql'))
-await run('006 ulang', sql('supabase/migrations/006_email_domain.sql'))
+await run('006', sql('supabase/manual_migrations/006_email_domain.sql'))
+await run('006 ulang', sql('supabase/manual_migrations/006_email_domain.sql'))
 const ins = async (email) => { try { await db.exec(`insert into auth.users(id,email) values (gen_random_uuid(), ${email===null?'null':`'${email}'`})`); return 'DITERIMA' } catch (e) { return 'DITOLAK: ' + e.message } }
 console.log('siti@takom.id            :', await ins('siti@takom.id'))
 console.log('SITI.K@TAKOM.ID (kapital):', await ins('SITI.K@TAKOM.ID'))
@@ -110,8 +110,8 @@ console.log('x@sub.takom.id           :', await ins('x@sub.takom.id'))
 console.log('tanpa email (null)       :', await ins(null))
 
 // ===== uji 007: keluarkan sesi =====
-await run('007', sql('supabase/migrations/007_revoke_sessions.sql'))
-await run('007 ulang', sql('supabase/migrations/007_revoke_sessions.sql'))
+await run('007', sql('supabase/manual_migrations/007_revoke_sessions.sql'))
+await run('007 ulang', sql('supabase/manual_migrations/007_revoke_sessions.sql'))
 await run('seed sesi', `insert into auth.sessions(user_id) values ('${U(1)}'),('${U(1)}'),('${U(2)}');`)
 console.log('user biasa memanggil revoke_user_sessions:', await call(1, `select revoke_user_sessions('${U(1)}')`))
 await db.exec(`set role service_role`)
@@ -120,8 +120,8 @@ await db.exec(`reset role`)
 console.log('service_role memanggil                    :', r7, '| sesi tersisa:', JSON.stringify(await q(`select user_id from auth.sessions`)), '(harus hanya user 2)')
 
 // ===== uji 008: cabang aktif =====
-await run('008', sql('supabase/migrations/008_active_branch.sql'))
-await run('008 ulang', sql('supabase/migrations/008_active_branch.sql'))
+await run('008', sql('supabase/manual_migrations/008_active_branch.sql'))
+await run('008 ulang', sql('supabase/manual_migrations/008_active_branch.sql'))
 await db.exec(`update profiles set is_active = true where id = '${U(1)}'; update user_permissions set can_create = null where user_id = '${U(1)}'; update profiles set role_id = '${kasirRole}' where id = '${U(1)}'`)
 const cab1 = (await q(`select id from branches where code='CAB1'`))[0].id
 const stockAt = async (code, br) => (await q(`select s.qty from stock s join products p on p.id=s.product_id join branches b on b.id=s.branch_id where p.code='${code}' and b.code='${br}'`))[0]?.qty

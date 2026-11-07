@@ -16,24 +16,24 @@ Skrip impor: Node + `exceljs`. Tes SQL: `@electric-sql/pglite`.
 ## 3. Struktur folder
 ```
 supabase/schema.sql                         tabel, RLS, RPC awal, seed role/fitur
-supabase/migrations/002_products_import.sql kolom author, attributes[], constraint harga aktif > 0
-supabase/migrations/003_costs_and_line_discount.sql  harga beli rahasia + diskon per baris + create_sale baru
-supabase/migrations/004_stock_views.sql     stock_by_branch, set_stock, adjust_stock (cek cabang)
-supabase/migrations/005_user_permissions.sql hak granular: user_permissions, has_perm baru, RPC kelola role/user
-supabase/migrations/006_email_domain.sql    trigger: akun BARU wajib @takom.id
-supabase/migrations/007_revoke_sessions.sql revoke_user_sessions (hanya service_role)
-supabase/migrations/008_active_branch.sql   my_scope() + create_sale(p_branch): cabang aktif untuk role lintas cabang
-supabase/migrations/009_stock_tools.sql     import_stock() (impor CSV dari aplikasi), transfer_stock() (mutasi antar cabang), alasan transfer_in/out
-supabase/migrations/010_print_templates.sql  tabel print_templates (baca: semua user; tulis: hanya RPC save_print_template, superadmin)
+supabase/manual_migrations/002_products_import.sql kolom author, attributes[], constraint harga aktif > 0
+supabase/manual_migrations/003_costs_and_line_discount.sql  harga beli rahasia + diskon per baris + create_sale baru
+supabase/manual_migrations/004_stock_views.sql     stock_by_branch, set_stock, adjust_stock (cek cabang)
+supabase/manual_migrations/005_user_permissions.sql hak granular: user_permissions, has_perm baru, RPC kelola role/user
+supabase/manual_migrations/006_email_domain.sql    trigger: akun BARU wajib @takom.id
+supabase/manual_migrations/007_revoke_sessions.sql revoke_user_sessions (hanya service_role)
+supabase/manual_migrations/008_active_branch.sql   my_scope() + create_sale(p_branch): cabang aktif untuk role lintas cabang
+supabase/manual_migrations/009_stock_tools.sql     import_stock() (impor CSV dari aplikasi), transfer_stock() (mutasi antar cabang), alasan transfer_in/out
+supabase/manual_migrations/010_print_templates.sql  tabel print_templates (baca: semua user; tulis: hanya RPC save_print_template, superadmin)
 src/features/print/                         templates.ts (bawaan = nota lama TAKOM, merge aman, token), views.tsx (ReceiptView 80mm, InvoiceView A4, PrintSheet), FormatNotaPage.tsx (editor admin /format-nota)
-supabase/migrations/011_sales_recap.sql     RPC sales_recap (bulan/tahun WIB, cabang, halaman 20) + sale_detail (untuk detail & cetak ulang)
+supabase/manual_migrations/011_sales_recap.sql     RPC sales_recap (bulan/tahun WIB, cabang, halaman 20) + sale_detail (untuk detail & cetak ulang)
 src/features/sales/                         SalesRecapPage (filter bulan/tahun/cabang, kartu ringkasan, tabel 20 baris/halaman), SaleDetailModal (detail, cetak struk/A4, void), api.ts
-supabase/migrations/013_stock_move.sql      fitur hak 'stock_move' (pengadaan+superadmin), transfer_stock (5 arg, cek stock_move.u), transfer_stock_batch (atomik), pembersihan sisa percobaan lama
+supabase/manual_migrations/013_stock_move.sql      fitur hak 'stock_move' (pengadaan+superadmin), transfer_stock (5 arg, cek stock_move.u), transfer_stock_batch (atomik), pembersihan sisa percobaan lama
 src/features/stock/StockMovePage.tsx        halaman /mutasi-stok: pilih cabang asal/tujuan, cari produk (server-side), daftar, satu tombol pindahkan (atomik)
 src/features/print/printing.ts              pengaturan cetak per KOMPUTER (localStorage), triggerPrint (anti-ganda), penjaga sekali-cetak
 scripts/kasir-kiosk.cmd                     membuka Chrome/Edge mode --kiosk-printing (cetak langsung ke printer default, tanpa dialog)
 deploy/htaccess.example                     contoh SPA fallback Apache untuk base /_posweb/
-supabase/migrations/012_sales_export.sql     RPC sales_export (semua transaksi + rincian barang sebulan, dicatat di audit_log)
+supabase/manual_migrations/012_sales_export.sql     RPC sales_export (semua transaksi + rincian barang sebulan, dicatat di audit_log)
 scripts/backup.mjs + scripts/lib/backup-core.mjs + scripts/schedule-backup.ps1   backup mandiri (npm run backup / backup:verify), jadwal harian Windows
 src/features/sales/exportXlsx.ts            pembuat Excel (3 sheet), dimuat lazy saat tombol "Unduh Excel" ditekan
 supabase/checks/integritas_stok.sql         pemeriksaan keutuhan (baca saja): stok = riwayat, tanpa minus, total transaksi cocok
@@ -112,7 +112,7 @@ Ide role tambahan yang sudah didiskusikan (belum dibuat): supervisor kasir, guda
 - Impor: `npm run import:products -- file.xlsx --dry-run` lalu tanpa `--dry-run`. Default produk yang sudah ada DILEWATI (tidak menimpa harga yang diubah di aplikasi); `--update` menimpa. Stok awal: `--stock-branch=KODE` (hanya mengisi stok yang belum ada).
 
 ## 8. Cara menjalankan
-1. Supabase SQL Editor (role `postgres`): jalankan `schema.sql` lalu `migrations/002` → `003` → `004` → `005` → `006` → `007` → `008` → `009` → `010` → `011` → `012` → `013` berurutan. Setelah 005, pasang Edge Function `create-user` dan `reset-password` (Supabase → Edge Functions → Deploy a new function → Via Editor, nama `create-user`, tempel isi `supabase/functions/create-user/index.ts`; biarkan Verify JWT aktif; opsional secret `ALLOWED_ORIGIN` = alamat web aplikasi). Fungsi ini BELUM diuji di Supabase.
+1. Supabase SQL Editor (role `postgres`): jalankan `schema.sql` lalu `manual_migrations/002` → `003` → `004` → `005` → `006` → `007` → `008` → `009` → `010` → `011` → `012` → `013` berurutan. Setelah 005, pasang Edge Function `create-user` dan `reset-password` (Supabase → Edge Functions → Deploy a new function → Via Editor, nama `create-user`, tempel isi `supabase/functions/create-user/index.ts`; biarkan Verify JWT aktif; opsional secret `ALLOWED_ORIGIN` = alamat web aplikasi). Fungsi ini BELUM diuji di Supabase.
 2. Buat user di Authentication → Users (centang Auto Confirm), lalu isi `profiles` dengan SQL (lihat README). User tanpa baris `profiles` aktif akan langsung dikeluarkan oleh aplikasi.
 3. `.env` dari `.env.example` (URL + anon key). `.env.import` dari `.env.import.example` (hanya untuk skrip impor, di komputer pemilik).
 4. `npm install` → `npm run dev` (http://localhost:5173). Cek: `npx tsc --noEmit`, `npm run build`, `npm run test:sql`, `npm run test:e2e`, `npm run test:csv`, `npm run test:print`, `npm run test:backup`, `npm run test:xlsx`, `npm run test:printing`, `npm run test:merge`. Jalankan semua tes setiap mengubah SQL atau alur penjualan/stok; tambahkan kasus baru bila ada fitur baru.
@@ -175,3 +175,7 @@ Pemilik pindah ke agen lain karena kredit Claude gratis habis. Hal yang perlu di
 - `src/features/users/UsersRolesPage.tsx` di compare membuat `npm run build` GAGAL (mengimpor fungsi yang tidak ada di api.ts); sudah digantikan UsersPage + PermMatrix → tidak dibawa.
 - `20261107172300_user_permissions.sql` = salinan identik `005_user_permissions.sql` → dipakai nama 005 (idempoten; tidak perlu dijalankan ulang bila sudah).
 - Dev: http://localhost:5173/_posweb/ . Hosting statis butuh SPA fallback (lihat deploy/htaccess.example).
+
+## Folder SQL: `supabase/manual_migrations/` (BUKAN `supabase/migrations/`)
+- SQL proyek ini dijalankan MANUAL di SQL Editor (schema.sql lalu 002…013). Folder bawaan CLI `supabase/migrations/` sengaja TIDAK dipakai: integrasi GitHub "Supabase Preview" menjalankan semua file di sana dari database kosong dan memakai angka di depan nama sebagai nomor versi (dua file berawalan `005` = galat `schema_migrations_pkey`, dan `schema.sql` bukan migrasi sehingga `002` gagal di database kosong). Dengan nama folder ini, integrasi mengabaikannya → Preview tidak lagi gagal dan tidak ada risiko migrasi otomatis ke produksi.
+- Jangan membuat berkas SQL bernomor ganda; jangan menaruh SQL di `supabase/migrations/` kecuali alur dipindah penuh ke Supabase CLI (butuh `001_schema.sql` + semua migrasi dibuat idempoten + `supabase migration repair` pada database produksi).
