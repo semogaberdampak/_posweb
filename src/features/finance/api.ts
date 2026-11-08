@@ -9,8 +9,8 @@ export type FinanceData = {
   margin: { revenue_all: number; revenue_covered: number; cost: number; lines: number; lines_no_cost: number } | null
 }
 
-export async function fetchFinance(year: number, month: number, branchId: string | null): Promise<FinanceData> {
-  const { data, error } = await supabase.rpc('finance_summary', { p_year: year, p_month: month, p_branch: branchId })
+export async function fetchFinance(from: string, to: string, branchId: string | null): Promise<FinanceData> {
+  const { data, error } = await supabase.rpc('finance_summary_range', { p_from: from, p_to: to, p_branch: branchId })
   if (error) throw new Error(error.message === 'forbidden' ? 'Anda tidak punya akses untuk ini.' : error.message)
   return data as FinanceData
 }

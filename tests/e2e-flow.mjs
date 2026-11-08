@@ -195,6 +195,32 @@ await db.exec(`update sales set created_at = '2026-02-28 16:59:59+00' where id='
 const feb = await rc(SA, 2026, 2, null), mar = await rc(SA, 2026, 3, null)
 check('REKAP: 28 Feb 23:59:59 WIB masuk Februari, 1 Mar 00:00 WIB masuk Maret', feb.rows.some((r) => r.id === bA) && !feb.rows.some((r) => r.id === bB) && mar.rows.some((r) => r.id === bB) && !mar.rows.some((r) => r.id === bA))
 check('REKAP: bulan tanpa transaksi = kosong dengan ringkasan nol', (await rc(SA, 2026, 5, null)).total_rows === 0 && (await rc(SA, 2026, 5, null)).summary.total === 0)
+// ---------- rekap & ekspor RENTANG TANGGAL ----------
+const rr = async (u, a, b, br, pg = 1, sz = 20) => (await as(u, `select sales_recap_range('${a}','${b}',${br ? `'${B[br]}'` : 'null'},${pg},${sz}) as r`))[0].r
+const d28 = await rr(SA, '2026-02-28', '2026-02-28', null), d01 = await rr(SA, '2026-03-01', '2026-03-01', null), both = await rr(SA, '2026-02-28', '2026-03-01', null)
+check('RENTANG: 1 hari (28 Feb) hanya memuat transaksi 23:59:59 WIB, bukan yang 00:00 WIB 1 Mar', d28.rows.some((r) => r.id === bA) && !d28.rows.some((r) => r.id === bB))
+check('RENTANG: 1 Mar saja memuat transaksi 00:00 WIB', d01.rows.some((r) => r.id === bB) && !d01.rows.some((r) => r.id === bA))
+check('RENTANG: 28 Feb – 1 Mar (lintas bulan) = jumlah dua hari, kedua transaksi ada', both.total_rows === d28.total_rows + d01.total_rows && both.rows.some((r) => r.id === bA) && both.rows.some((r) => r.id === bB))
+const todayCnt = (await q(`select count(*)::int n from sales where (created_at at time zone 'Asia/Jakarta')::date = (now() at time zone 'Asia/Jakarta')::date`))[0].n
+const todayStr = (await q(`select to_char(now() at time zone 'Asia/Jakarta','YYYY-MM-DD') d`))[0].d
+check('RENTANG: "hari ini" (WIB) = hitungan independen dari tabel sales', (await rr(SA, todayStr, todayStr, null)).total_rows === todayCnt, `${todayCnt}`)
+const w1 = await rr(SA, '2026-02-28', '2026-03-01', null, 1, 1), w2 = await rr(SA, '2026-02-28', '2026-03-01', null, 2, 1)
+check('RENTANG: paginasi 1 baris/halaman: halaman 1 & 2 berbeda dan lengkap', w1.total_rows === 2 && w1.rows.length === 1 && w2.rows.length === 1 && w1.rows[0].id !== w2.rows[0].id)
+const febWrap = await rc(SA, 2026, 2, null), febRange = await rr(SA, '2026-02-01', '2026-02-28', null)
+check('PEMBUNGKUS bulanan = rentang 1–akhir bulan (Februari)', JSON.stringify(febWrap) === JSON.stringify(febRange))
+const marWrap = await rc(SA, 2026, 3, null), marRange = await rr(SA, '2026-03-01', '2026-03-31', null)
+check('PEMBUNGKUS bulanan = rentang 1–31 (Maret, bulan 31 hari)', JSON.stringify(marWrap) === JSON.stringify(marRange))
+check('RENTANG: tanggal awal setelah akhir ditolak', /tanggal awal/.test(await err(SA, `select sales_recap_range('2026-03-02','2026-03-01')`) ?? ''))
+check('RENTANG: 366 hari boleh, 367 hari ditolak', (await err(SA, `select sales_recap_range('2026-01-01','2027-01-01')`)) === null && /maksimal 366/.test(await err(SA, `select sales_recap_range('2026-01-01','2027-01-02')`) ?? ''))
+check('RENTANG: tanggal kosong / di luar 2000–2100 ditolak', /tidak valid/.test(await err(SA, `select sales_recap_range(null,'2026-01-01')`) ?? '') && /tidak valid/.test(await err(SA, `select sales_recap_range('1999-12-31','2000-01-02')`) ?? ''))
+check('RENTANG: kasir tidak bisa membuka cabang lain / role tanpa hak ditolak', /forbidden/.test(await err(KR.KRANGGAN, `select sales_recap_range('2026-02-28','2026-03-01','${B.PAULUS}')`) ?? '') && /forbidden/.test(await err(PENG, `select sales_recap_range('2026-02-28','2026-03-01')`) ?? ''))
+const kr = await rr(KR.KRANGGAN, '2026-01-01', '2026-12-31', null)
+check('RENTANG: kasir tanpa memilih cabang hanya melihat cabangnya', kr.rows.every((r) => r.branch_name === 'Takom Kranggan'))
+const exr = (await as(SA, `select sales_export_range('2026-02-28','2026-03-01',null,20000) as r`))[0].r
+check('EKSPOR RENTANG: jumlah transaksi = rekap rentang yang sama; item terhubung', exr.sales.length === both.total_rows && exr.items.every((i) => exr.sales.some((x) => x.id === i.sale_id)))
+check('EKSPOR RENTANG: tercatat di audit log dengan tanggal awal/akhir', (await q(`select count(*)::int n from audit_log where action='sales.export' and detail->>'from'='2026-02-28' and detail->>'to'='2026-03-01'`))[0].n >= 1)
+check('EKSPOR RENTANG: batas baris & hak tetap berlaku', /terlalu banyak/.test(await err(SA, `select sales_export_range('2026-02-28','2026-03-01',null,1)`) ?? '') && /forbidden/.test(await err(KR.KRANGGAN, `select sales_export_range('2026-02-28','2026-03-01','${B.PAULUS}')`) ?? ''))
+
 // detail transaksi
 const one = (await q(`select id, invoice_no, total, branch_id from sales where status='completed' and branch_id='${B.KRANGGAN}' limit 1`))[0]
 const det = (await as(KR.KRANGGAN, `select sale_detail('${one.id}') as r`))[0].r

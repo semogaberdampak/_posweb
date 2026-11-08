@@ -5,22 +5,22 @@ import { useAuth } from '../auth/AuthProvider'
 import { listBranches } from '../users/api'
 import { fetchFinance } from './api'
 import { METHOD } from './exportFinance'
+import { PeriodPicker } from '../../shared/PeriodPicker'
+import { defaultPeriod, labelOf, rangeOf, tagOf, validate, type Period } from '../../shared/period'
 
-const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
-const FIRST_YEAR = 2024
 const pct = (a: number, b: number) => (b > 0 ? `${((a / b) * 100).toLocaleString('id-ID', { maximumFractionDigits: 1 })}%` : '-')
 
 export default function FinancePage() {
   const { allBranches, activeBranchId, profile } = useAuth()
-  const now = new Date()
-  const [month, setMonth] = useState(now.getMonth() + 1)
-  const [year, setYear] = useState(now.getFullYear())
+  const [period, setPeriod] = useState<Period>(() => defaultPeriod())
+  const periodErr = validate(period)
+  const rg = rangeOf(period)
   const [branch, setBranch] = useState<string>(allBranches ? (activeBranchId ?? 'all') : 'all')
   const [exporting, setExporting] = useState(false); const [exportErr, setExportErr] = useState('')
   const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: listBranches, enabled: allBranches })
   const branchArg = allBranches && branch !== 'all' ? branch : null
-  const years = Array.from({ length: Math.max(now.getFullYear(), year) - FIRST_YEAR + 1 }, (_, i) => FIRST_YEAR + i).reverse()
-  const { data, error, isFetching } = useQuery({ queryKey: ['finance', year, month, branchArg], queryFn: () => fetchFinance(year, month, branchArg), placeholderData: keepPreviousData })
+  const { data: rawData, error, isFetching } = useQuery({ queryKey: ['finance', rg.from, rg.to, branchArg], queryFn: () => fetchFinance(rg.from, rg.to, branchArg), placeholderData: keepPreviousData, enabled: !periodErr })
+  const data = periodErr ? undefined : rawData // periode tidak sah: jangan tampilkan angka periode lama
   const branchLabel = allBranches ? (branch === 'all' ? 'Semua cabang' : branches.find((b) => b.id === branch)?.name ?? '') : profile?.branch_name ?? ''
 
   async function exportXlsx() {
@@ -28,9 +28,9 @@ export default function FinancePage() {
     setExporting(true); setExportErr('')
     try {
       const x = await import('./exportFinance') // library Excel baru dimuat saat tombol ditekan
-      const buf = await x.buildFinanceWorkbook(data, { year, month, branchLabel, generatedBy: profile?.full_name ?? 'POS' })
+      const buf = await x.buildFinanceWorkbook(data, { periodLabel: labelOf(period), branchLabel, generatedBy: profile?.full_name ?? 'POS' })
       const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
-      const a = document.createElement('a'); a.href = url; a.download = x.financeFileName(year, month, branchLabel); a.click()
+      const a = document.createElement('a'); a.href = url; a.download = x.financeFileName(tagOf(period), branchLabel); a.click()
       setTimeout(() => URL.revokeObjectURL(url), 5000)
     } catch (e) { setExportErr(e instanceof Error ? e.message : 'Gagal membuat file Excel.') } finally { setExporting(false) }
   }
@@ -45,19 +45,19 @@ export default function FinancePage() {
     <div className="h-full overflow-auto p-6">
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <h1 className="mr-auto text-xl font-semibold">Keuangan</h1>
-        <label className="text-sm">Bulan<select className="input mt-1" value={month} onChange={(e) => setMonth(Number(e.target.value))}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select></label>
-        <label className="text-sm">Tahun<select className="input mt-1" value={year} onChange={(e) => setYear(Number(e.target.value))}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</select></label>
+        <PeriodPicker value={period} onChange={setPeriod} />
         {allBranches && (
           <label className="text-sm">Cabang
             <select className="input mt-1" value={branch} onChange={(e) => setBranch(e.target.value)}><option value="all">Semua cabang</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
           </label>
         )}
-        <button className="btn-ghost" disabled={exporting || !data || data.totals.count + data.totals.void_count === 0} onClick={exportXlsx}>{exporting ? 'Menyiapkan…' : 'Unduh Excel'}</button>
+        <button className="btn-ghost" disabled={exporting || !!periodErr || !data || data.totals.count + data.totals.void_count === 0} onClick={exportXlsx}>{exporting ? 'Menyiapkan…' : 'Unduh Excel'}</button>
       </div>
-      <p className="mb-3 text-sm text-text-muted">{MONTHS[month - 1]} {year} · {branchLabel} · waktu WIB · transaksi void tidak dihitung</p>
-      {error && <p role="alert" className="mb-3 text-danger">{error instanceof Error ? error.message : 'Gagal memuat.'}</p>}
+      <p className="mb-3 text-sm text-text-muted">{labelOf(period)} · {branchLabel} · waktu WIB · transaksi void tidak dihitung</p>
+      {periodErr && <p role="alert" className="mb-3 text-danger">{periodErr}</p>}
+      {error && !periodErr && <p role="alert" className="mb-3 text-danger">{error instanceof Error ? error.message : 'Gagal memuat.'}</p>}
       {exportErr && <p role="alert" className="mb-3 text-danger">{exportErr}</p>}
-      {!data && !error && <p className="text-text-muted">Memuat…</p>}
+      {!data && !error && !periodErr && <p className="text-text-muted">Memuat…</p>}
 
       {T && (
         <div className={isFetching ? 'opacity-70' : ''}>
@@ -113,7 +113,7 @@ export default function FinancePage() {
                     <tr key={x.date} className="border-t border-border-muted"><td className="py-1">{x.date}</td><td className="text-right">{x.count}</td><td className="text-right font-medium">{rupiah(x.net)}</td>
                       <td className="pl-3"><div className="h-2 rounded-full bg-primary" style={{ width: `${Math.max(2, (x.net / maxDay) * 100)}%` }} /></td></tr>
                   ))}
-                  {data.by_day.length === 0 && <tr><td colSpan={4} className="py-6 text-center text-text-muted">Tidak ada transaksi pada {MONTHS[month - 1]} {year}.</td></tr>}
+                  {data.by_day.length === 0 && <tr><td colSpan={4} className="py-6 text-center text-text-muted">Tidak ada transaksi pada {labelOf(period)}.</td></tr>}
                 </tbody></table>
             </div>
           </section>

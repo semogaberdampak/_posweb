@@ -1,14 +1,13 @@
 import type { FinanceData } from './api'
 
-const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
 export const METHOD: Record<string, string> = { cash: 'Tunai', qris: 'QRIS', debit: 'Debit', credit_card: 'Kartu Kredit' }
 const NUM = '#,##0'
 
-export const financeFileName = (year: number, month: number, branchLabel: string) =>
-  `keuangan_${year}-${String(month).padStart(2, '0')}_${branchLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cabang'}.xlsx`
+export const financeFileName = (tag: string, branchLabel: string) =>
+  `keuangan_${tag}_${branchLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cabang'}.xlsx`
 
 /** Excel Keuangan: sheet Ringkasan, Per Metode, Per Cabang, Per Hari. Angka sebagai angka, teks sebagai teks. */
-export async function buildFinanceWorkbook(d: FinanceData, meta: { year: number; month: number; branchLabel: string; generatedBy: string }): Promise<ArrayBuffer> {
+export async function buildFinanceWorkbook(d: FinanceData, meta: { periodLabel: string; branchLabel: string; generatedBy: string }): Promise<ArrayBuffer> {
   const ExcelJS = (await import('exceljs')).default
   const wb = new ExcelJS.Workbook(); wb.creator = meta.generatedBy; wb.created = new Date()
   const fill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFE5E7EB' } }
@@ -21,7 +20,7 @@ export async function buildFinanceWorkbook(d: FinanceData, meta: { year: number;
 
   const sm = wb.addWorksheet('Ringkasan')
   sm.columns = [{ width: 44 }, { width: 20 }]
-  sm.addRow([`Laporan Keuangan ${MONTHS[meta.month - 1]} ${meta.year}`]).font = { bold: true, size: 14 }
+  sm.addRow([`Laporan Keuangan ${meta.periodLabel}`]).font = { bold: true, size: 14 }
   sm.addRow([`Cabang: ${meta.branchLabel} · waktu WIB`]); sm.addRow([])
   const T = d.totals
   const line = (k: string, v: number | string) => { const r = sm.addRow([k, v]); if (typeof v === 'number') r.getCell(2).numFmt = NUM }

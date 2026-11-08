@@ -5,29 +5,30 @@ import { useAuth } from '../auth/AuthProvider'
 import { listBranches } from '../users/api'
 import { fetchExport, fetchRecap, PAGE_SIZE } from './api'
 import { fmtTime, SaleDetailModal } from './SaleDetailModal'
+import { PeriodPicker } from '../../shared/PeriodPicker'
+import { defaultPeriod, labelOf, rangeOf, tagOf, validate, type Period } from '../../shared/period'
 
-const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
 const METHOD: Record<string, string> = { cash: 'Tunai', qris: 'QRIS', debit: 'Debit', credit_card: 'Kartu Kredit' }
-const FIRST_YEAR = 2024
 
 export default function SalesRecapPage() {
   const { allBranches, activeBranchId, profile } = useAuth()
-  const now = new Date()
-  const [month, setMonth] = useState(now.getMonth() + 1)
-  const [year, setYear] = useState(now.getFullYear())
+  const [period, setPeriod] = useState<Period>(() => defaultPeriod())
+  const periodErr = validate(period)
+  const rg = rangeOf(period)
   const [branch, setBranch] = useState<string>(allBranches ? (activeBranchId ?? 'all') : 'all') // 'all' = semua cabang yang boleh dilihat
   const [page, setPage] = useState(1)
   const [openId, setOpenId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false); const [exportErr, setExportErr] = useState('')
   const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: listBranches, enabled: allBranches })
-  const years = Array.from({ length: Math.max(now.getFullYear(), year) - FIRST_YEAR + 1 }, (_, i) => FIRST_YEAR + i).reverse()
   const branchArg = allBranches && branch !== 'all' ? branch : null
 
-  const { data, isFetching, error } = useQuery({
-    queryKey: ['sales-recap', year, month, branchArg, page],
-    queryFn: () => fetchRecap(year, month, branchArg, page),
+  const { data: rawData, isFetching, error } = useQuery({
+    queryKey: ['sales-recap', rg.from, rg.to, branchArg, page],
+    queryFn: () => fetchRecap(rg.from, rg.to, branchArg, page),
     placeholderData: keepPreviousData,
+    enabled: !periodErr, // periode tidak sah (mis. tanggal terbalik) tidak dikirim ke server
   })
+  const data = periodErr ? undefined : rawData // periode tidak sah: jangan tampilkan angka periode lama
   const pages = Math.max(1, Math.ceil((data?.total_rows ?? 0) / PAGE_SIZE))
   useEffect(() => { if (data && page > pages) setPage(pages) }, [data, page, pages])
   const pick = (fn: () => void) => { fn(); setPage(1) } // ganti bulan/tahun/cabang = kembali ke halaman 1
@@ -40,10 +41,10 @@ export default function SalesRecapPage() {
   async function exportXlsx() {
     setExporting(true); setExportErr('')
     try {
-      const [d, x] = await Promise.all([fetchExport(year, month, branchArg), import('./exportXlsx')]) // library Excel baru dimuat saat tombol ditekan
-      const buf = await x.buildRecapWorkbook(d, { year, month, branchLabel, generatedBy: profile?.full_name ?? 'POS' })
+      const [d, x] = await Promise.all([fetchExport(rg.from, rg.to, branchArg), import('./exportXlsx')]) // library Excel baru dimuat saat tombol ditekan
+      const buf = await x.buildRecapWorkbook(d, { periodLabel: labelOf(period), branchLabel, generatedBy: profile?.full_name ?? 'POS' })
       const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
-      const a = document.createElement('a'); a.href = url; a.download = x.exportFileName(year, month, branchLabel); a.click()
+      const a = document.createElement('a'); a.href = url; a.download = x.exportFileName(tagOf(period), branchLabel); a.click()
       setTimeout(() => URL.revokeObjectURL(url), 5000)
     } catch (e) { setExportErr(e instanceof Error ? e.message : 'Gagal membuat file Excel.') } finally { setExporting(false) }
   }
@@ -53,12 +54,7 @@ export default function SalesRecapPage() {
     <div className="h-full overflow-auto p-6 print:hidden">
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <h1 className="mr-auto text-xl font-semibold">Rekap Penjualan</h1>
-        <label className="text-sm">Bulan
-          <select className="input mt-1" value={month} onChange={(e) => pick(() => setMonth(Number(e.target.value)))}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select>
-        </label>
-        <label className="text-sm">Tahun
-          <select className="input mt-1" value={year} onChange={(e) => pick(() => setYear(Number(e.target.value)))}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</select>
-        </label>
+        <PeriodPicker value={period} onChange={(p) => pick(() => setPeriod(p))} />
         {allBranches && (
           <label className="text-sm">Cabang
             <select className="input mt-1" value={branch} onChange={(e) => pick(() => setBranch(e.target.value))}>
@@ -66,11 +62,12 @@ export default function SalesRecapPage() {
             </select>
           </label>
         )}
-        <button className="btn-ghost" disabled={exporting || !data || data.total_rows === 0} onClick={exportXlsx}>{exporting ? 'Menyiapkan…' : 'Unduh Excel'}</button>
+        <button className="btn-ghost" disabled={exporting || !data || data.total_rows === 0 || !!periodErr} onClick={exportXlsx}>{exporting ? 'Menyiapkan…' : 'Unduh Excel'}</button>
       </div>
       {exportErr && <p role="alert" className="mb-3 text-danger">{exportErr}</p>}
-      <p className="mb-3 text-sm text-text-muted">{MONTHS[month - 1]} {year} · {branchLabel} · waktu WIB</p>
-      {error && <p role="alert" className="mb-3 text-danger">{error instanceof Error ? error.message : 'Gagal memuat rekap.'}</p>}
+      <p className="mb-3 text-sm text-text-muted">{labelOf(period)} · {branchLabel} · waktu WIB</p>
+      {periodErr && <p role="alert" className="mb-3 text-danger">{periodErr}</p>}
+      {error && !periodErr && <p role="alert" className="mb-3 text-danger">{error instanceof Error ? error.message : 'Gagal memuat rekap.'}</p>}
 
       {data && (
         <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -100,7 +97,7 @@ export default function SalesRecapPage() {
                 <td className="p-2">{r.status === 'void' ? <span className="text-danger">Void</span> : <span className="text-success">Selesai</span>}</td>
               </tr>
             ))}
-            {data && data.rows.length === 0 && <tr><td colSpan={9} className="p-8 text-center text-text-muted">Tidak ada transaksi pada {MONTHS[month - 1]} {year}.</td></tr>}
+            {data && data.rows.length === 0 && <tr><td colSpan={9} className="p-8 text-center text-text-muted">Tidak ada transaksi pada {labelOf(period)}.</td></tr>}
             {!data && !error && <tr><td colSpan={9} className="p-8 text-center text-text-muted">Memuat…</td></tr>}
           </tbody>
         </table>

@@ -1,6 +1,5 @@
 import type { ExportData } from './api'
 
-const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
 const METHOD: Record<string, string> = { cash: 'Tunai', qris: 'QRIS', debit: 'Debit', credit_card: 'Kartu Kredit' }
 const NUM = '#,##0'
 
@@ -10,11 +9,12 @@ export function wib(iso: string) {
     .formatToParts(new Date(iso)).map((x) => [x.type, x.value]))
   return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}:${p.second}` }
 }
-export const exportFileName = (year: number, month: number, branchLabel: string) =>
-  `rekap-penjualan_${year}-${String(month).padStart(2, '0')}_${branchLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cabang'}.xlsx`
+/** tag = periode untuk nama berkas, mis. 2026-11 atau 2026-11-01_sd_2026-11-07 (lihat shared/period.tagOf) */
+export const exportFileName = (tag: string, branchLabel: string) =>
+  `rekap-penjualan_${tag}_${branchLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cabang'}.xlsx`
 
 /** Excel: sheet Ringkasan, Transaksi (1 baris/transaksi), Rincian Barang (1 baris/item). Semua teks disimpan sebagai TEKS (bukan rumus). */
-export async function buildRecapWorkbook(data: ExportData, meta: { year: number; month: number; branchLabel: string; generatedBy: string }): Promise<ArrayBuffer> {
+export async function buildRecapWorkbook(data: ExportData, meta: { periodLabel: string; branchLabel: string; generatedBy: string }): Promise<ArrayBuffer> {
   const ExcelJS = (await import('exceljs')).default
   const wb = new ExcelJS.Workbook()
   wb.creator = meta.generatedBy; wb.created = new Date()
@@ -28,7 +28,7 @@ export async function buildRecapWorkbook(data: ExportData, meta: { year: number;
   // ---- Ringkasan ----
   const sm = wb.addWorksheet('Ringkasan')
   sm.columns = [{ width: 34 }, { width: 18 }, { width: 18 }]
-  sm.addRow([`Rekap Penjualan ${MONTHS[meta.month - 1]} ${meta.year}`]).font = { bold: true, size: 14 }
+  sm.addRow([`Rekap Penjualan ${meta.periodLabel}`]).font = { bold: true, size: 14 }
   sm.addRow([`Cabang: ${meta.branchLabel} · waktu WIB`]); sm.addRow([])
   const sum = (a: number[]) => a.reduce((x, y) => x + y, 0)
   const table = (title: string, cols: string[], rows: (string | number)[][]) => {
