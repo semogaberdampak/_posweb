@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "import:products": "node scripts/import-products.mjs",
@@ -18,7 +18,8 @@
     "test:backup": "node tests/backup.mjs",
     "test:xlsx": "node tests/export-xlsx.mjs",
     "test:printing": "node tests/printing.mjs",
-    "test:merge": "node tests/merge-compat.mjs"
+    "test:merge": "node tests/merge-compat.mjs",
+    "dev:vite": "vite"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

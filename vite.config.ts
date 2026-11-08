@@ -10,8 +10,8 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss()],
     base,
     build: { sourcemap: false }, // jangan publikasikan source map
-    // 127.0.0.1 (IPv4): di sebagian Windows port pada alamat IPv6 (::1) diblokir -> "EACCES permission denied ::1:5173"
-    server: { host: '127.0.0.1', port: 5173 },
+    // 127.0.0.1 (IPv4) + port 3000: di Windows sebagian rentang port (mis. 5113-5212) dicadangkan sistem -> "EACCES permission denied"
+    server: { host: '127.0.0.1', port: 3000 }, // `npm run dev` memilih port bebas otomatis (scripts/dev.mjs)
     preview: { host: '127.0.0.1', port: 4173 },
   }
 })

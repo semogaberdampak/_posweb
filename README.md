@@ -49,4 +49,4 @@ Setelah migrasi 005, pasang Edge Function `supabase/functions/create-user` (liha
 ## Backup
 `npm run backup`, `npm run backup:verify`, jadwal: `scripts/schedule-backup.ps1`. Lihat AGENTS.md bagian Backup.
 
-Catatan: dev di http://127.0.0.1:5173/ . Di akar domain (Vercel) tanpa pengaturan tambahan; bila di subfolder isi `VITE_BASE=/_posweb/` (lihat .env.example). Tes tambahan: `npm run test:printing`, `npm run test:merge`.
+Catatan: dev di alamat yang dicetak `npm run dev` (bawaan http://127.0.0.1:3000/) . Di akar domain (Vercel) tanpa pengaturan tambahan; bila di subfolder isi `VITE_BASE=/_posweb/` (lihat .env.example). Tes tambahan: `npm run test:printing`, `npm run test:merge`.
