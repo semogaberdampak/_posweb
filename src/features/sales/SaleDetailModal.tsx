@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Modal } from '../../shared/Modal'
 import { rupiah } from '../../shared/format'
 import { useAuth } from '../auth/AuthProvider'
 import { PrintSheet } from '../print/views'
 import { triggerPrint, usePrintPrefs } from '../print/printing'
+import { printDirect } from '../../lib/webusb-printer'
 import { useInvoiceCfg, useReceiptCfg, type PrintData } from '../print/templates'
 import { fetchSaleDetail, voidSale, type SaleDetail } from './api'
 
@@ -24,11 +25,21 @@ export function SaleDetailModal({ id, onClose }: { id: string; onClose: () => vo
   const { data: d, error, isLoading } = useQuery({ queryKey: ['sale-detail', id], queryFn: () => fetchSaleDetail(id) })
   const receipt = useReceiptCfg(), invoice = useInvoiceCfg()
   const [kind, setKind] = useState<'receipt' | 'invoice'>('receipt')
-  const { thermalOnly } = usePrintPrefs()
+  const { thermalOnly, usbDirect } = usePrintPrefs()
+  const alive = useRef(true)
+  useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
   const [voiding, setVoiding] = useState(false); const [reason, setReason] = useState('')
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false)
 
-  const printNow = (k: 'receipt' | 'invoice') => { setKind(k); triggerPrint() }
+  async function printNow(k: 'receipt' | 'invoice') {
+    if (k === 'receipt' && d && usbDirect) {
+      const r = await printDirect(toPrint(d), receipt)
+      if (r.ok) return
+      console.warn('Cetak langsung USB gagal, memakai cetak browser:', r.reason)
+    }
+    if (!alive.current) return
+    setKind(k); triggerPrint()
+  }
   async function doVoid() {
     if (!reason.trim()) return setErr('Alasan wajib diisi.')
     setBusy(true); setErr('')

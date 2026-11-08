@@ -9,9 +9,9 @@ import StockPage from './features/stock/StockPage'
 import StockMovePage from './features/stock/StockMovePage'
 import SettingsPage from './features/settings/SettingsPage'
 import SalesRecapPage from './features/sales/SalesRecapPage'
+import FinancePage from './features/finance/FinancePage'
 import FormatNotaPage from './features/print/FormatNotaPage'
 
-const Soon = ({ title }: { title: string }) => <div className="p-6 text-xl">{title} — segera hadir</div>
 
 export default function App() {
   return (
@@ -25,7 +25,7 @@ export default function App() {
           <Route path="/mutasi-stok" element={<RequirePerm feature="stock_move"><StockMovePage /></RequirePerm>} />
           <Route path="/stok" element={<RequirePerm feature="stock"><StockPage /></RequirePerm>} />
           <Route path="/laporan" element={<RequirePerm feature="sales_recap"><SalesRecapPage /></RequirePerm>} />
-          <Route path="/keuangan" element={<RequirePerm feature="finance"><Soon title="Keuangan" /></RequirePerm>} />
+          <Route path="/keuangan" element={<RequirePerm feature="finance"><FinancePage /></RequirePerm>} />
           <Route path="/pengguna" element={<RequirePerm feature="users"><UsersPage /></RequirePerm>} />
           <Route path="/format-nota" element={<RequirePerm feature="settings"><FormatNotaPage /></RequirePerm>} />
           <Route path="/pengaturan" element={<RequirePerm feature="settings"><SettingsPage /></RequirePerm>} />

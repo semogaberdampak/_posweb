@@ -10,7 +10,7 @@ Aplikasi POS web terintegrasi (multi-cabang + pusat) untuk toko buku/rohani. Dat
 - Ada template tampilan referensi (prototipe React-CDN dengan tema hijau); tampilannya sudah dipindahkan ke proyek ini. Template TIDAK dipakai untuk logika (ia hanya menyimpan data di memori browser dan mengecek hak akses di sisi klien, jadi tidak aman).
 
 ## 2. Stack
-Vite 5 + React 18 + TypeScript (strict) + Tailwind v4 (dark mode lewat class `dark`, token warna semantik amber — lihat §4b) + React Router 6 + TanStack Query 5 + lucide-react + `@supabase/supabase-js`. Tanpa server sendiri: browser bicara langsung ke Supabase; aturan penting dijaga di database (RLS + fungsi RPC `security definer`).
+Vite 5 + React 18 + TypeScript (strict) + Tailwind v4 (dark mode lewat class `dark`, token warna semantik amber, lihat bagian palet) + React Router 6 + TanStack Query 5 + lucide-react + `@supabase/supabase-js`. Tanpa server sendiri: browser bicara langsung ke Supabase; aturan penting dijaga di database (RLS + fungsi RPC `security definer`).
 Skrip impor: Node + `exceljs`. Tes SQL: `@electric-sql/pglite`.
 
 ## 3. Struktur folder
@@ -25,11 +25,18 @@ supabase/manual_migrations/007_revoke_sessions.sql revoke_user_sessions (hanya s
 supabase/manual_migrations/008_active_branch.sql   my_scope() + create_sale(p_branch): cabang aktif untuk role lintas cabang
 supabase/manual_migrations/009_stock_tools.sql     import_stock() (impor CSV dari aplikasi), transfer_stock() (mutasi antar cabang), alasan transfer_in/out
 supabase/manual_migrations/010_print_templates.sql  tabel print_templates (baca: semua user; tulis: hanya RPC save_print_template, superadmin)
-src/features/print/                         templates.ts (bawaan = nota lama TAKOM, merge aman, token), views.tsx (ReceiptView 80mm, InvoiceView A4, PrintSheet), FormatNotaPage.tsx (editor admin /format-nota), printing.ts (pengaturan cetak per KOMPUTER, triggerPrint anti-ganda)
+src/features/print/                         templates.ts (bawaan = nota lama TAKOM, merge aman, token), views.tsx (ReceiptView 80mm, InvoiceView A4, PrintSheet), FormatNotaPage.tsx (editor admin /format-nota)
 supabase/manual_migrations/011_sales_recap.sql     RPC sales_recap (bulan/tahun WIB, cabang, halaman 20) + sale_detail (untuk detail & cetak ulang)
 src/features/sales/                         SalesRecapPage (filter bulan/tahun/cabang, kartu ringkasan, tabel 20 baris/halaman), SaleDetailModal (detail, cetak struk/A4, void), api.ts
+supabase/manual_migrations/014_finance.sql          RPC finance_summary (bulan WIB; total, per metode/cabang/hari, estimasi laba bila punya cost_prices) + _cost_val (internal)
+src/features/finance/                       FinancePage, exportFinance.ts (Excel 4 sheet), api.ts
+src/lib/escpos.ts                           struk ESC/POS teks yang MENGIKUTI Format Nota (kolom 48/32, ASCII-aman)
+src/lib/webusb-printer.ts                   cetak langsung via WebUSB (pairing kelas printer, kirim bertahap, gagal rapi -> cadangan cetak browser)
+src/types/webusb.d.ts                       tipe WebUSB minimal
+public/favicon.svg|ico, apple-touch-icon.png ikon aplikasi (keranjang, warna primer amber)
 supabase/manual_migrations/013_stock_move.sql      fitur hak 'stock_move' (pengadaan+superadmin), transfer_stock (5 arg, cek stock_move.u), transfer_stock_batch (atomik), pembersihan sisa percobaan lama
 src/features/stock/StockMovePage.tsx        halaman /mutasi-stok: pilih cabang asal/tujuan, cari produk (server-side), daftar, satu tombol pindahkan (atomik)
+src/features/print/printing.ts              pengaturan cetak per KOMPUTER (localStorage), triggerPrint (anti-ganda), penjaga sekali-cetak
 scripts/kasir-kiosk.cmd                     membuka Chrome/Edge mode --kiosk-printing (cetak langsung ke printer default, tanpa dialog)
 deploy/htaccess.example                     contoh SPA fallback Apache bila di subfolder (VITE_BASE=/_posweb/); vercel.json di akar = SPA fallback + header keamanan untuk Vercel
 supabase/manual_migrations/012_sales_export.sql     RPC sales_export (semua transaksi + rincian barang sebulan, dicatat di audit_log)
@@ -40,28 +47,22 @@ supabase/functions/reset-password/index.ts  Edge Function: HANYA superadmin mere
 supabase/functions/create-user/index.ts     Edge Function pembuat akun login+profil (service_role di sisi Supabase)
 scripts/import-products.mjs                 impor Excel master → products (+ product_costs)
 scripts/import-stock.mjs                    impor stok awal per cabang dari file hitung fisik (kode, jumlah)
-tests/sql-smoke.mjs                         tes SQL otomatis migrasi 002–008 + RPC inti (npm run test:sql)
-tests/e2e-flow.mjs                          uji alur lengkap 7 cabang: semua migrasi, impor stok, semua metode bayar, diskon per baris, void, mutasi, keutuhan (npm run test:e2e [produk.json])
+tests/sql-smoke.mjs                         tes SQL otomatis (npm run test:sql)
+tests/e2e-flow.mjs                          uji alur lengkap 7 cabang: impor stok, semua metode bayar, diskon per baris, void, mutasi, keutuhan (npm run test:e2e [produk.json])
 tests/print-render.mjs                      uji tampilan struk/nota A4 + merge konfigurasi (npm run test:print)
-tests/printing.mjs                          uji triggerPrint/penjaga sekali-cetak (npm run test:printing)
 tests/stock-csv.mjs                         uji pembaca CSV stok (npm run test:csv)
-tests/export-xlsx.mjs                       uji isi & keamanan berkas Excel rekap (npm run test:xlsx)
-tests/backup.mjs                            uji backup/verifikasi/retensi (npm run test:backup)
-tests/merge-compat.mjs                      uji pembersihan objek lama compare.zip oleh 013 (npm run test:merge)
 src/main.tsx, App.tsx, index.css            provider, route, gaya (.btn/.btn-primary/.btn-ghost/.input = rounded)
 src/lib/supabase.ts                         klien (hanya anon key dari .env)
-src/lib/webusb-printer.ts                   percobaan cetak langsung ESC/POS via WebUSB; TIDAK memanggil window.print (pemanggil yang memutuskan fallback)
-src/types/webusb.d.ts                       deklarasi tipe WebUSB minimal (tanpa dependensi tambahan)
 src/shared/                                 format.ts (rupiah), hooks.ts (useDebounced, useIdle), search.ts (cleanSearch), Modal.tsx
 src/features/<fitur>/                       modular: halaman + api.ts + komponen per fitur
   auth/      AuthProvider (sesi, profil, can(feature, 'c'|'r'|'u'|'d'), auto-logout 15 menit), guards, LoginPage (ingat email, ikon mata)
   layout/    Layout (sidebar menurut hak akses, header, toggle tema)
-  pos/       PosPage (kasir), api.ts, types.ts
+  pos/       PosPage (kasir), api.ts, types.ts (struk lewat features/print + lib/webusb-printer)
+  finance/   FinancePage (/keuangan), exportFinance.ts (Excel), api.ts
   products/  ProductsPage (daftar baris + double-click = detail card), ProductForm, ProductDetail, api.ts
-  stock/     StockPage, StockEdit, StockByBranch (chip stok per cabang), ImportStockModal, TransferModal, StockMovePage (/mutasi-stok), csv.ts, api.ts
-  sales/     SalesRecapPage, SaleDetailModal (detail/cetak ulang/void), exportXlsx.ts, api.ts
-  users/     UsersPage (tab Pengguna & Role), PermMatrix, NewUserModal, ResetPasswordModal, api.ts
-  settings/  SettingsPage (tema + preferensi printer), theme.tsx
+  stock/     StockPage, StockEdit, StockByBranch (chip stok per cabang), api.ts
+  users/     UsersPage (tab Pengguna & Role), PermMatrix, NewUserModal, api.ts
+  settings/  SettingsPage, theme.tsx
 ```
 Fitur baru = folder baru di `features/` + 1 baris di tabel `features` (SQL) + 1 route di `App.tsx` + 1 item NAV di `Layout.tsx`.
 
@@ -94,7 +95,7 @@ Hosting: paket gratis Supabase (500 MB DB, tanpa backup otomatis, proyek dijeda 
 ## 5. Peran & hak akses (RBAC berbasis permission, bukan nama role)
 Tabel: `roles`, `features`, `role_permissions(role_id, feature_key, can_create/read/update/delete)`, `profiles(id, full_name, branch_id, role_id, is_active)`. Role = paket permission (template). Granular: tiap USER bisa punya pengecualian per fitur di `user_permissions` (NULL = ikut role, true/false = menimpa); `has_perm()` memakai pengecualian dulu, baru role. Superadmin mengatur semuanya di halaman Pengguna & Hak Akses (matriks Tambah/Lihat/Ubah/Hapus per fitur). Fitur baru = baris baru di tabel `features` → otomatis muncul di matriks. `roles.all_branches=true` → boleh lihat semua cabang.
 Role bawaan: `superadmin` (semua, lintas cabang), `kasir` (pos c/r, sales_recap r; hanya cabangnya), `kabag` (sales_recap r, sales_void r/u; lintas cabang), `pengadaan` (products, stock, purchasing c/r/u; cost_prices c/r/u; lintas cabang), `keuangan` (sales_recap r, finance r, cost_prices r; lintas cabang).
-Fitur (`features.key`): pos, sales_recap, sales_void, products, stock, purchasing, members, finance, users, roles, audit, settings, cost_prices.
+Fitur (`features.key`): pos, sales_recap, sales_void, products, stock, purchasing, members, finance, users, roles, audit, settings, cost_prices, stock_move.
 Ide role tambahan yang sudah didiskusikan (belum dibuat): supervisor kasir, gudang, manajer cabang, auditor (read-only), marketing/member.
 
 ## 6. Aturan keamanan (WAJIB dipatuhi)
@@ -118,31 +119,27 @@ Ide role tambahan yang sudah didiskusikan (belum dibuat): supervisor kasir, guda
 - Impor: `npm run import:products -- file.xlsx --dry-run` lalu tanpa `--dry-run`. Default produk yang sudah ada DILEWATI (tidak menimpa harga yang diubah di aplikasi); `--update` menimpa. Stok awal: `--stock-branch=KODE` (hanya mengisi stok yang belum ada).
 
 ## 8. Cara menjalankan
-1. Supabase SQL Editor (role `postgres`): jalankan `schema.sql` lalu `manual_migrations/002` → `003` → `004` → `005` → `006` → `007` → `008` → `009` → `010` → `011` → `012` → `013` berurutan. Setelah 005, pasang Edge Function `create-user` dan `reset-password` (Supabase → Edge Functions → Deploy a new function → Via Editor, nama `create-user`, tempel isi `supabase/functions/create-user/index.ts`; biarkan Verify JWT aktif; opsional secret `ALLOWED_ORIGIN` = alamat web aplikasi). Fungsi ini BELUM diuji di Supabase.
+1. Supabase SQL Editor (role `postgres`): jalankan `schema.sql` lalu `manual_migrations/002` → `003` → `004` → `005` → `006` → `007` → `008` → `009` → `010` → `011` → `012` → `013` → `014` berurutan. Setelah 005, pasang Edge Function `create-user` dan `reset-password` (Supabase → Edge Functions → Deploy a new function → Via Editor, nama `create-user`, tempel isi `supabase/functions/create-user/index.ts`; biarkan Verify JWT aktif; opsional secret `ALLOWED_ORIGIN` = alamat web aplikasi). Fungsi ini BELUM diuji di Supabase.
 2. Buat user di Authentication → Users (centang Auto Confirm), lalu isi `profiles` dengan SQL (lihat README). User tanpa baris `profiles` aktif akan langsung dikeluarkan oleh aplikasi.
 3. `.env` dari `.env.example` (URL + anon key). `.env.import` dari `.env.import.example` (hanya untuk skrip impor, di komputer pemilik).
-4. `npm install` → `npm run dev` (alamat dicetak di terminal, bawaan http://127.0.0.1:3000). Cek: `npx tsc --noEmit`, `npm run build`, `npm run test:sql`, `npm run test:e2e`, `npm run test:csv`, `npm run test:print`, `npm run test:backup`, `npm run test:xlsx`, `npm run test:printing`, `npm run test:merge`. Jalankan semua tes setiap mengubah SQL atau alur penjualan/stok; tambahkan kasus baru bila ada fitur baru.
-Catatan lingkungan: shell sandbox kadang `sh` (tanpa brace expansion). Tailwind v4: jangan `@apply` kelas kustom; pakai `@utility`. Build & semua tes lulus di Node 26.10.0 (8 Nov 2026), tetapi Vite 5 resmi mendukung Node 18/20/22 — patok versi (mis. `.nvmrc`) saat menyiapkan CI.
+4. `npm install` → `npm run dev` (alamat dicetak di terminal, bawaan http://127.0.0.1:3000). Cek: `npx tsc --noEmit`, `npm run build`, `npm run test:sql`, `npm run test:e2e`, `npm run test:csv`, `npm run test:print`, `npm run test:backup`, `npm run test:xlsx`, `npm run test:printing`, `npm run test:merge`, `npm run test:finance`, `npm run test:escpos`. Jalankan semua tes setiap mengubah SQL atau alur penjualan/stok; tambahkan kasus baru bila ada fitur baru.
+Catatan lingkungan: shell sandbox kadang `sh` (tanpa brace expansion). Tailwind v4: jangan `@apply` kelas kustom; pakai `@utility`.
 
 ## 9. Status
-**Selesai:** login & sesi, layout/tema, kasir (scan barcode, diskon per produk, semua metode bayar, struk 80mm), produk & harga (daftar baris, tambah/ubah, detail card, harga beli rahasia), stok per cabang (Stok & Pengadaan, impor CSV, strip stok di kasir, detail produk), mutasi stok atomik (`013` + `/mutasi-stok`), pengguna & hak akses granular (`005` + Edge Function; UI/Edge Function belum diuji di Supabase), rekap penjualan (`011`: filter bulan/tahun/cabang, 20 baris/halaman, detail, cetak ulang, void), ekspor Excel (`012`), editor Format Nota (`010`), pengaturan printer per komputer, backup mandiri + jadwal Windows, migrasi 002–013, dan 8 skrip tes lokal (semua lulus per 8 Nov 2026).
-- **Cetak langsung WebUSB (8 Nov 2026):** `src/lib/webusb-printer.ts` sudah ada dan dipanggil kasir, tetapi BELUM ada UI untuk memilih/memberi izin printer (`requestUSBPrinter` belum dipakai). Tanpa izin perangkat, jalur ini selalu gagal dan kasir memakai dialog cetak browser (tetap satu kali, tidak ganda). Struk USB juga belum mengikuti `print_templates`. Keputusan lanjut/tidaknya menunggu pemilik (lihat §10).
-
+**Selesai:** Pengguna & Hak Akses granular (migrasi 005 + halaman + Edge Function; SQL lolos tes lokal, UI/Edge Function belum diuji di Supabase), login, layout/tema, kasir (scan barcode, diskon per produk, bayar, struk), produk & harga (daftar, tambah/ubah, detail card, harga beli rahasia), stok per cabang (halaman Stok & Pengadaan, strip stok di kasir, detail produk), skrip impor, migrasi 002–004, tes SQL.
 **Belum dibuat (urutan yang disarankan):**
 1. (Pemilik) hitung fisik tiap cabang → impor lewat aplikasi → uji kasir dengan stok nyata. Fitur impor/mutasi/total sudah ada; sisanya pekerjaan data, bukan kode.
-2. Rekap harian per kasir (tutup kasir) dan tampilan khusus Kabag; rekap bulanan + void SUDAH ada.
-3. Keuangan: rekap penjualan per metode bayar (route `/keuangan` masih "segera hadir").
-4. Halaman Cabang (tambah/nonaktifkan; saat ini cabang baru lewat SQL). Pengguna & Role sudah dibuat tetapi perlu diuji di Supabase sungguhan, termasuk Edge Function.
+2. Tutup kasir: rekap harian per kasir/kabag (Rekap Penjualan bulanan, void, ekspor Excel & Keuangan bulanan SUDAH ada).
+3. Perbaikan data harga beli (lihat bagian Keuangan): isi `lastCost`/Price1 yang benar agar estimasi laba akurat.
+4. Halaman Cabang (tambah/nonaktifkan; saat ini cabang baru lewat SQL). Pengguna & Role SUDAH dibuat (lihat Status selesai) tetapi perlu diuji di Supabase sungguhan, termasuk Edge Function.
 5. Purchase Order (fitur `purchasing` ada, tabel/halaman belum) dan halaman Member (tabel `members` ada; kasir saat ini hanya mengetik nomor/nama).
-6. Cetak: putuskan WebUSB vs `kasir-kiosk.cmd`; bila WebUSB dilanjutkan, tambah pemilih printer + samakan isi struk dengan Format Nota. Belum teruji di perangkat pemilik.
-7. Hardening produksi: upgrade `react-router-dom` (npm audit moderat; JANGAN `npm audit fix --force`, itu memaksa lompat versi besar dan men-downgrade exceljs), header CSP/HSTS di hosting, MFA superadmin/keuangan, matikan sign-up publik di Supabase Auth, cadangan database, CI + lint, dan patok versi Node (Vite 5 resmi Node 18/20/22; build saat ini lolos di Node 26).
+6. Hardening produksi: upgrade `react-router-dom` (npm audit moderat; JANGAN `npm audit fix --force`, itu memaksa lompat versi besar dan men-downgrade exceljs), header CSP/HSTS di hosting, MFA superadmin/keuangan, matikan sign-up publik di Supabase Auth, cadangan database.
 
 ## 10. Pertanyaan terbuka (tanya pemilik, jangan menebak)
 - Konfirmasi pemilik untuk jalur stok awal di atas (hitung fisik per lokasi + impor per cabang). Cabang selain PUSAT harus ditambahkan dulu ke `branches` (butuh nama dan kode semua cabang).
 - Barcode di buku berisi nomor apa? Pencarian scan kini mencocokkan **kode produk (kolom A)** persis. Jika barcode = ISBN (`prod ISBN` di Excel berformat `979-672-465-0`), perlu kolom/indeks pencarian ISBN.
 - Konfirmasi ejaan cabang ke-6 (Antonius) dan nama orang untuk akun kasir tiap cabang. Daftar user Pusat menyusul.
-- Printer struk: dialog cetak browser + `scripts\kasir-kiosk.cmd` (kiosk-printing) sudah ada. Apakah jalur WebUSB dilanjutkan? Bila ya: printer thermal di Windows umumnya perlu driver WinUSB (mis. Zadig), yang dapat menghilangkan fungsi printer default Windows; perlu uji di perangkat pemilik. Rekomendasi sementara: tetap pakai kiosk-printing.
-- Data master: di folder lokal ada `nyuw07-11-26.xls` (7 Nov 2026, ±8,6 MB) yang lebih baru daripada `database28Ags.xlsx` (6 Sep 2026). Apakah ini master produk terbaru yang harus diimpor (uji `--dry-run` dulu)? Keduanya tidak ikut Git.
+- Printer struk (thermal 80mm via dialog cetak browser sudah ada; QZ Tray bila ingin cetak tanpa dialog).
 
 ## 11. Jangan lakukan
 - Jangan mengubah keputusan di §4 atau melonggarkan §6.
@@ -152,14 +149,6 @@ Catatan lingkungan: shell sandbox kadang `sh` (tanpa brace expansion). Tailwind 
 
 ## 12. Catatan serah-terima (22 Okt 2026)
 Pemilik pindah ke agen lain karena kredit Claude gratis habis. Hal yang perlu ditanyakan ke pemilik di awal: (a) apakah migrasi `004_stock_views.sql` sudah dijalankan di Supabase; (b) apakah `delete from stock;` (membuang stok percobaan 100 pcs) sudah dijalankan; (c) angka yang muncul saat scan satu buku (kode produk atau ISBN); (d) nama + kode semua cabang. `npm run test:sql` butuh `npm install` dulu (paket `@electric-sql/pglite`).
-
-## Catatan perubahan 8 Nov 2026
-- Commit `7347c09` menambahkan `src/lib/webusb-printer.ts` dan mempercepat debounce pencarian kasir menjadi 50 ms. Tindak lanjut pada hari yang sama:
-  - (a) `src/types/webusb.d.ts` ditambahkan agar `npx tsc --noEmit` dan `npm run build` lolos **tanpa menambah dependensi**;
-  - (b) cetak ganda diperbaiki: `printDirectNota()` sekarang mengembalikan `boolean` dan tidak memanggil `window.print()`; `PosPage` hanya memakai dialog browser bila USB tidak berhasil. Penjaga per nomor nota tetap, aman StrictMode, dan `aliveRef` mencegah cetak setelah pindah halaman;
-  - (c) `tests/print-render.mjs` memperbaiki escape path Windows sehingga `npm run test:print` lulus di Windows (sebelumnya gagal karena `D:\...` berubah menjadi `D:...`).
-- Status tes 8 Nov 2026 (semua lulus): `tsc`, `build`, `test:sql`, `test:e2e` (79), `test:print` (15), `test:printing` (15), `test:csv` (11), `test:xlsx` (14), `test:backup` (15), `test:merge` (9).
-- Catatan: `src/features/pos/Receipt.tsx` sudah tidak ada; struk kini dirender oleh `src/features/print/views.tsx`. `requestUSBPrinter()` belum dipanggil dari UI mana pun, jadi jalur WebUSB belum bisa dipakai sampai ada pemilih printer.
 
 ## Format cetak (struk 80mm & nota A4)
 - Dua format meniru nota lama TAKOM: **struk 80mm** (nota transaksi, otomatis tercetak setelah bayar) dan **nota A4** (laporan; tombol "Cetak nota A4" / "Cetak ulang struk" di banner setelah transaksi).
@@ -186,8 +175,6 @@ Pemilik pindah ke agen lain karena kredit Claude gratis habis. Hal yang perlu di
 - Pengaturan per KOMPUTER (localStorage, halaman Pengaturan → "Printer struk"): *Cetak struk otomatis* (bawaan nyala) dan *hanya printer thermal* (menyembunyikan tombol nota A4). Setelah transaksi selesai, struk 80mm tercetak otomatis sekali (penjaga per nomor nota; aman terhadap StrictMode); "Cetak ulang struk (thermal)" ada di banner kasir & detail transaksi Rekap; "Cetak struk contoh" untuk uji printer.
 - Browser TIDAK bisa memilih printer atau mencetak diam-diam sendiri. Cara kerja: printer thermal dijadikan **printer default Windows**, aplikasi dibuka lewat `scripts\kasir-kiosk.cmd` (Chrome/Edge `--kiosk-printing`, profil terpisah) sehingga `window.print()` langsung ke printer default tanpa dialog. Tanpa itu dialog cetak tetap muncul. Karena kiosk-printing tanpa dialog, nota A4 dicetak dari komputer lain (browser biasa).
 - Belum teruji pada printer/Windows pemilik. Ukuran kertas memakai `@page { size: <lebar>mm auto }`; pastikan ukuran roll 80mm diatur di driver printer.
-- **WebUSB (eksperimental, per 8 Nov 2026):** `src/lib/webusb-printer.ts` mencoba mengirim ESC/POS langsung ke printer USB. Belum ada tombol pemilih printer, jadi tanpa izin perangkat jalur ini tidak aktif dan aplikasi otomatis memakai dialog cetak browser (hanya sekali). Struk USB masih versi sederhana (nama, qty, harga, total) dan BELUM memakai `print_templates`; jangan dijadikan satu-satunya cara cetak sebelum isinya disamakan dan diuji di perangkat nyata.
-- `printDirectNota()` mengembalikan `true` bila data benar-benar terkirim dan TIDAK memanggil `window.print()`; fallback ke dialog browser dilakukan pemanggil (`PosPage`). Jangan menambahkan `window.print()` di dalamnya agar tidak terjadi cetak ganda.
 
 ## Penggabungan dengan compare.zip (7 Nov 2026)
 - Dari compare: `base: '/_posweb/'` — DIGANTI menjadi env `VITE_BASE` (bawaan `/`) karena produksi di Vercel (akar domain; base subfolder membuat aset 404). `BrowserRouter basename={import.meta.env.BASE_URL}` ditambahkan (di compare belum ada), tambahan `.gitignore`.
@@ -202,3 +189,14 @@ Pemilik pindah ke agen lain karena kredit Claude gratis habis. Hal yang perlu di
 
 ## Berkas sisa yang harus tidak ada di repo (dari compare.zip / versi lama)
 `src/features/users/UsersRolesPage.tsx` (membuat `tsc`/build GAGAL di Vercel), folder `src/features/stock-move/`, `src/features/pos/Receipt.tsx`, folder `supabase/migrations/` (diganti `supabase/manual_migrations/`). Mengekstrak zip menimpa folder TIDAK menghapus berkas yang hanya ada di folder lama → hapus manual, lalu jalankan `npm run build` sebelum commit.
+
+## Keuangan (`/keuangan`, fitur `finance`, migrasi 014)
+- Filter Bulan/Tahun/Cabang (WIB). Kartu: penjualan bersih, kotor, diskon, transaksi, rata-rata, void (void tidak masuk angka). Tabel per metode bayar (dengan porsi), per cabang (bila >1), per hari (dengan batang). **Unduh Excel** (4 sheet).
+- **Estimasi laba kotor** hanya muncul bagi yang juga punya hak `cost_prices`; tanpa hak itu server mengembalikan `margin: null` dan Excel tidak memuat bagian laba. Server hanya mengirim agregat, tidak pernah harga beli per produk.
+- **Data modal di Excel pemilik tidak bisa dipercaya mentah**: dari 28.330 produk aktif, `Price1` SAMA dengan harga jual pada 11.855 (42%) dan LEBIH TINGGI pada 1.781 (6%); `lastCost` hanya ada di 2.314 produk (median ±55% harga jual, tampak realistis). Aturan: modal = `lastCost` bila < harga jual saat transaksi, kalau tidak `Price1` bila < harga jual, kalau tidak baris itu TIDAK dihitung dan dilaporkan sebagai "tanpa data modal" + angka "cakupan data modal" (peringatan bila < 80%). Modal memakai harga beli TERKINI (bukan historis saat transaksi) → estimasi.
+- Tes: `npm run test:finance` (angka dihitung tangan, hak akses, rahasia modal, batas bulan WIB) + bagian KEUANGAN di `npm run test:xlsx`.
+
+## Cetak langsung USB (WebUSB) — eksperimental (dari zip pemilik 8 Nov 2026, diperbaiki)
+- Asal: `webusb-printer.ts` di zip pemilik mengirim struk teks polos (mengabaikan Format Nota), memakai perangkat USB apa saja, tidak punya tombol pairing (jadi tak pernah aktif), lebar 32 kolom tetap. Sekarang: isi dibangun `escpos.ts` dari `ReceiptCfg` (format admin ikut), hanya perangkat kelas printer (7), pairing lewat tombol di Pengaturan (aturan browser: harus klik pengguna), pengaturan `pos.usbDirect` (bawaan mati), kirim bertahap ≤4096 byte, setiap kegagalan → cetak browser (dialog/kiosk).
+- **Windows:** WebUSB hanya bisa membuka perangkat berdriver WinUSB; printer berdriver pabrikan biasanya "Access denied". Mengganti driver (mis. Zadig) membuat printer tidak lagi tampil sebagai printer Windows (kiosk-printing tak bisa memakainya). Jalur andal tetap printer default Windows + `scripts\kasir-kiosk.cmd`. Belum diuji pada printer nyata.
+- Dari zip yang sama diterima: `useMemo` penyaringan hasil pencarian di memori + debounce 50 ms (server memakai pencarian kode/nama yang sama, jadi tidak ada hasil hilang), `aliveRef` (cegah cetak susulan di halaman lain), perbaikan tes untuk path Windows, URL produksi `https://posweb-nine.vercel.app/` sebagai bawaan `kasir-kiosk.cmd` (menggantikan `kasir-kiosk-1.cmd`).

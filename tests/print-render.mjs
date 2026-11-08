@@ -9,7 +9,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const cache = path.join(ROOT, 'node_modules', '.cache'); fs.mkdirSync(cache, { recursive: true })
 const out = path.join(cache, 'print-render-test.cjs') // di dalam proyek agar memakai React yang sama
 const entry = path.join(os.tmpdir(), 'print-entry.tsx')
-// Path Windows berisi "\" yang dimakan sebagai escape di dalam string JS; pakai "/" + JSON.stringify.
+// Path Windows berisi "\\" yang dimakan sebagai escape di string JS; pakai "/" + JSON.stringify.
 const imp = (p) => JSON.stringify(p.replace(/\\/g, '/'))
 fs.writeFileSync(entry, `export * from ${imp(path.join(ROOT, 'src/features/print/views'))}; export * from ${imp(path.join(ROOT, 'src/features/print/templates'))}`)
 await build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'cjs', outfile: out, external: ['react', 'react-dom', 'react/jsx-runtime'], jsx: 'automatic',

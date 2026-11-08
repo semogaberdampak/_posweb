@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from './theme'
 import { PrintSheet } from '../print/views'
 import { triggerPrint, usePrintPrefs } from '../print/printing'
 import { SAMPLE, useInvoiceCfg, useReceiptCfg } from '../print/templates'
+import { deviceLabel, pairedPrinter, pairUsbPrinter, printDirect, usbSupported } from '../../lib/webusb-printer'
 
 function ChangePassword() {
   const [a, setA] = useState(''); const [b, setB] = useState('')
@@ -30,13 +31,31 @@ function ChangePassword() {
 }
 
 function PrinterSettings({ onTest }: { onTest: () => void }) {
-  const { autoPrint, thermalOnly, changeAuto, changeThermalOnly } = usePrintPrefs()
+  const { autoPrint, thermalOnly, usbDirect, changeAuto, changeThermalOnly, changeUsbDirect } = usePrintPrefs()
+  const receipt = useReceiptCfg()
+  const [usbName, setUsbName] = useState(''); const [usbMsg, setUsbMsg] = useState('')
+  useEffect(() => { pairedPrinter().then((d) => setUsbName(d ? deviceLabel(d) : '')).catch(() => setUsbName('')) }, [])
+  async function pair() { const r = await pairUsbPrinter(); if (r.device) { setUsbName(deviceLabel(r.device)); setUsbMsg('Printer dihubungkan.') } else setUsbMsg(r.reason ?? '') }
+  async function testUsb() { setUsbMsg('Mencetak…'); const r = await printDirect(SAMPLE, receipt); setUsbMsg(r.ok ? 'Terkirim ke printer.' : `Gagal: ${r.reason}`) }
   return (
     <div className="space-y-3 rounded-2xl bg-bg-light p-4 shadow">
       <div className="font-medium">Printer struk (thermal) — khusus komputer ini</div>
       <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={autoPrint} onChange={(e) => changeAuto(e.target.checked)} /><span>Cetak struk otomatis setelah transaksi selesai</span></label>
       <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={thermalOnly} onChange={(e) => changeThermalOnly(e.target.checked)} /><span>Komputer ini hanya memakai printer thermal (sembunyikan tombol nota A4)</span></label>
       <button className="btn-ghost" onClick={onTest}>Cetak struk contoh</button>
+      {usbSupported() && (
+        <div className="space-y-2 rounded-2xl border border-border-muted p-3">
+          <div className="text-sm font-medium">Cetak langsung via USB (eksperimental)</div>
+          <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={usbDirect} onChange={(e) => changeUsbDirect(e.target.checked)} /><span>Kirim struk langsung ke printer USB; bila gagal, otomatis memakai cetak browser</span></label>
+          <div className="flex flex-wrap items-center gap-2">
+            <button className="btn-ghost" onClick={pair}>Hubungkan printer USB</button>
+            <button className="btn-ghost" disabled={!usbName} onClick={testUsb}>Tes cetak langsung</button>
+            <span className="text-sm text-text-muted">{usbName ? `Terhubung: ${usbName}` : 'Belum ada printer terhubung'}</span>
+          </div>
+          {usbMsg && <p role="status" className="text-sm">{usbMsg}</p>}
+          <p className="text-xs text-text-muted">Di Windows, WebUSB hanya bisa membuka printer yang memakai driver WinUSB; dengan driver bawaan pabrikan biasanya muncul "Access denied" dan aplikasi memakai cetak browser. Isi struk mengikuti Format Nota.</p>
+        </div>
+      )}
       <ol className="list-decimal space-y-1 pl-5 text-sm text-text-muted">
         <li>Jadikan printer thermal sebagai <b>printer bawaan (default)</b> di Windows.</li>
         <li>Agar struk keluar <b>tanpa jendela dialog</b>, buka aplikasi lewat <code>scripts\kasir-kiosk.cmd</code> (Chrome/Edge mode cetak langsung). Tanpa itu, dialog cetak muncul tiap transaksi.</li>

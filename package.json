@@ -19,7 +19,9 @@
     "test:xlsx": "node tests/export-xlsx.mjs",
     "test:printing": "node tests/printing.mjs",
     "test:merge": "node tests/merge-compat.mjs",
-    "dev:vite": "vite"
+    "dev:vite": "vite",
+    "test:finance": "node tests/finance.mjs",
+    "test:escpos": "node tests/escpos.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

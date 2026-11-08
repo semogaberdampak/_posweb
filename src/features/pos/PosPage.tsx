@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import { createSale, searchProducts } from './api'
 import { PrintSheet } from '../print/views'
 import { createPrintGuard, triggerPrint, usePrintPrefs } from '../print/printing'
+import { printDirect } from '../../lib/webusb-printer'
 import { useInvoiceCfg, useReceiptCfg, type PrintData } from '../print/templates'
 import { listBranches } from '../users/api'
 import { StockByBranch } from '../stock/StockByBranch'
@@ -10,7 +11,6 @@ import { useAuth } from '../auth/AuthProvider'
 import { rupiah } from '../../shared/format'
 import { useDebounced } from '../../shared/hooks'
 import type { CartLine, Method, Product, SaleResult } from './types'
-import { printDirectNota } from '../../lib/webusb-printer'
 
 const DISCOUNTS = [0, 5, 10, 15, 20, 25]
 const dLabel = (d: number) => (d === 0 ? 'Tanpa diskon' : `${d}%`)
@@ -25,7 +25,7 @@ type Done = { sale: SaleResult; lines: CartLine[]; method: Method; cash: number;
 export default function PosPage() {
   const [step, setStep] = useState<Step>('items')
   const [q, setQ] = useState('')
-  const dq = useDebounced(q, 50) // Debounce dipercepat ke 50ms untuk pencarian lebih responsif
+  const dq = useDebounced(q, 50) // debounce singkat + penyaringan di memori (di bawah) = hasil terasa instan
   const [cursor, setCursor] = useState(0)
   const [cart, setCart] = useState<CartLine[]>([])
   const [allDisc, setAllDisc] = useState<number | null>(null) // null = "diskon semua" mati
@@ -38,9 +38,9 @@ export default function PosPage() {
   const [done, setDone] = useState<Done | null>(null)
   const qc = useQueryClient()
   const [printKind, setPrintKind] = useState<'receipt' | 'invoice'>('receipt')
-  const { autoPrint, thermalOnly } = usePrintPrefs()
+  const { autoPrint, thermalOnly, usbDirect } = usePrintPrefs()
+  const aliveRef = useRef(false) // false saat halaman ditinggalkan: cegah cetak susulan di halaman lain
   const printGuard = useRef(createPrintGuard())
-  const aliveRef = useRef(false) // false saat halaman ditinggalkan; mencegah cetak susulan di halaman lain
   const receiptCfg = useReceiptCfg(), invoiceCfg = useInvoiceCfg() // dimuat sejak halaman dibuka agar siap saat cetak
   const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: listBranches })
   const { activeBranchId, allBranches, profile } = useAuth()
@@ -51,15 +51,6 @@ export default function PosPage() {
   const { data: rawProducts = [], isFetching } = useQuery({
     queryKey: ['products', dq], queryFn: () => searchProducts(dq), placeholderData: keepPreviousData,
   })
-
-  // In-Memory Filter untuk hasil pencarian instan pada ketikan kasir
-  const products = useMemo(() => {
-    if (!q.trim()) return rawProducts
-    const term = q.toLowerCase().trim()
-    return rawProducts.filter(
-      (p) => p.code.toLowerCase().includes(term) || p.name.toLowerCase().includes(term)
-    )
-  }, [rawProducts, q])
 
   const eff = (l: CartLine) => allDisc ?? l.disc
   const lineDisc = (l: CartLine) => Math.round((l.price * l.qty * eff(l)) / 100) // tampilan; server menghitung ulang
@@ -72,31 +63,21 @@ export default function PosPage() {
 
   // ganti cabang aktif = mulai transaksi baru (cegah keranjang terbawa ke cabang lain)
   useEffect(() => { setCart([]); setStep('items'); setAllDisc(null); setMember(''); setMethod(null); setCash('') }, [activeBranchId])
+  // Saat mengetik, daftar sebelumnya langsung disaring di memori (server memakai pencarian kode/nama yang sama), jadi tidak menunggu jaringan.
+  const products = useMemo(() => {
+    const term = q.trim().toLowerCase()
+    return term ? rawProducts.filter((p) => p.code.toLowerCase().includes(term) || p.name.toLowerCase().includes(term)) : rawProducts
+  }, [rawProducts, q])
   useEffect(() => { aliveRef.current = true; return () => { aliveRef.current = false } }, [])
-  useEffect(() => { setCursor(0) }, [dq])
+  useEffect(() => setCursor(0), [dq])
   useEffect(() => { if (step === 'items') searchRef.current?.focus() }, [step])
   useEffect(() => { document.querySelector(`[data-row="${cursor}"]`)?.scrollIntoView({ block: 'nearest' }) }, [cursor])
-
   useEffect(() => {
     if (!done) return
     if (!autoPrint) return // pengaturan komputer ini: cetak otomatis dimatikan
-    setPrintKind('receipt') // otomatis hanya struk 80mm; nota A4 lewat tombol
-
-    // Satu transaksi hanya dicetak otomatis sekali. Guard diklaim di sini agar render
-    // ganda (StrictMode) tidak mencetak dua kali, tetapi cetak tetap jalan setelah efek pertama.
+    // satu nota = satu cetakan otomatis. Diklaim di sini (kebal render ganda StrictMode); cetak berjalan terus meski efek dibersihkan.
     if (!printGuard.current.once(done.sale.invoice_no)) return
-
-    const data = printData(done)
-    // Coba printer USB lebih dulu; hanya bila tidak tersedia/gagal, pakai dialog cetak browser.
-    void printDirectNota({
-      storeName: data.branch || 'TOKO KASIR',
-      transNo: data.invoiceNo,
-      items: data.lines,
-      total: data.total,
-    }).then((langsung) => {
-      if (!aliveRef.current) return // halaman sudah ditinggalkan: jangan cetak di halaman lain
-      if (!langsung) triggerPrint()
-    })
+    void printReceipt(done)
   }, [done, autoPrint])
 
   function add(p: Product) {
@@ -143,21 +124,20 @@ export default function PosPage() {
       setError(e instanceof Error ? e.message : 'Transaksi gagal')
     } finally { setBusy(false) }
   }
-
-  async function printAgain(k: 'receipt' | 'invoice') {
-    setPrintKind(k)
-    if (!done || k !== 'receipt') { triggerPrint(); return }
-
-    const data = printData(done)
-    const langsung = await printDirectNota({
-      storeName: data.branch || 'TOKO KASIR',
-      transNo: data.invoiceNo,
-      items: data.lines,
-      total: data.total,
-    })
-    if (!langsung) triggerPrint()
+  /** Struk 80mm: bila "cetak langsung USB" aktif, coba printer USB lebih dulu (mengikuti Format Nota); gagal/tidak aktif -> cetak browser. */
+  async function printReceipt(d: Done) {
+    if (usbDirect) {
+      const r = await printDirect(printData(d), receiptCfg)
+      if (r.ok) return
+      console.warn('Cetak langsung USB gagal, memakai cetak browser:', r.reason)
+    }
+    if (!aliveRef.current) return
+    setPrintKind('receipt'); triggerPrint()
   }
-
+  function printAgain(k: 'receipt' | 'invoice') {
+    if (k === 'receipt' && done) { void printReceipt(done); return }
+    setPrintKind(k); triggerPrint()
+  }
   function printData(d: Done): PrintData {
     const bid = activeBranchId ?? profile?.branch_id
     return {

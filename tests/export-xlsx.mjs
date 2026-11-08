@@ -46,4 +46,26 @@ t('nama berkas aman & jelas', X.exportFileName(2026, 3, 'Takom Santa Maria') ===
 const empty = await X.buildRecapWorkbook({ sales: [], items: [] }, { year: 2026, month: 5, branchLabel: 'X', generatedBy: 'A' })
 const wb2 = new ExcelJS.Workbook(); await wb2.xlsx.load(empty)
 t('bulan kosong tetap menghasilkan berkas valid', wb2.getWorksheet('Transaksi').rowCount === 1)
+
+// ---- Excel Keuangan ----
+const outF = path.join(cache, 'export-finance-test.cjs')
+await build({ entryPoints: [path.join(ROOT, 'src/features/finance/exportFinance.ts')], bundle: true, platform: 'node', format: 'cjs', outfile: outF, external: ['exceljs'], logLevel: 'silent' })
+const FX = require(outF)
+const fin = { totals: { count: 4, gross: 166000, discount: 6800, net: 159200, void_count: 1, void_total: 10000 },
+  by_method: [{ method: 'qris', count: 1, net: 45000 }, { method: 'cash', count: 1, net: 40000 }, { method: 'debit', count: 1, net: 40000 }, { method: 'credit_card', count: 1, net: 34200 }],
+  by_branch: [{ branch: 'Takom Kranggan', count: 2, net: 85000, discount: 5000 }, { branch: 'Takom Paulus', count: 2, net: 74200, discount: 1800 }],
+  by_day: [{ date: '2026-11-07', count: 4, net: 159200, discount: 6800 }],
+  margin: { revenue_all: 159200, revenue_covered: 99200, cost: 69000, lines: 5, lines_no_cost: 2 } }
+const wbF = new ExcelJS.Workbook(); await wbF.xlsx.load(await FX.buildFinanceWorkbook(fin, { year: 2026, month: 11, branchLabel: 'Semua cabang', generatedBy: 'Keuangan' }))
+t('KEUANGAN xlsx: sheet Ringkasan, Per Metode, Per Cabang, Per Hari', JSON.stringify(wbF.worksheets.map((w) => w.name)) === JSON.stringify(['Ringkasan', 'Per Metode', 'Per Cabang', 'Per Hari']))
+const fc = []; wbF.getWorksheet('Ringkasan').eachRow((r) => fc.push(r.values.slice(1)))
+const fr = (k) => fc.find((r) => r[0] === k)
+t('KEUANGAN xlsx: bersih 159.200 sebagai ANGKA, rata-rata 39.800, void 10.000', fr('Penjualan bersih')[1] === 159200 && fr('Rata-rata per transaksi')[1] === 39800 && fr('Transaksi dibatalkan (void) — nilai')[1] === 10000)
+t('KEUANGAN xlsx: laba 30.200, margin 30,4%, cakupan 62,3%, 2 baris tanpa modal', fr('Laba kotor (estimasi)')[1] === 30200 && fr('Margin (%)')[1] === 30.4 && fr('Cakupan data modal (% dari penjualan bersih)')[1] === 62.3 && fr('Baris penjualan tanpa data modal')[1] === 2, JSON.stringify(fc.slice(-8)))
+const pm = wbF.getWorksheet('Per Metode'); const pmRows = []; pm.eachRow((r) => pmRows.push(r.values.slice(1)))
+t('KEUANGAN xlsx: per metode memakai nama Indonesia & porsi menjumlah 100%', pmRows[1][0] === 'QRIS' && Math.round(pmRows.slice(1).reduce((a, r) => a + r[3], 0)) === 100, JSON.stringify(pmRows))
+const noMargin = new ExcelJS.Workbook(); await noMargin.xlsx.load(await FX.buildFinanceWorkbook({ ...fin, margin: null }, { year: 2026, month: 11, branchLabel: 'X', generatedBy: 'K' }))
+const nm = []; noMargin.getWorksheet('Ringkasan').eachRow((r) => nm.push(r.values.slice(1)))
+t('KEUANGAN xlsx: tanpa hak harga beli (margin null) → bagian laba TIDAK ada sama sekali', !nm.some((r) => /laba|modal/i.test(String(r[0]))))
+t('KEUANGAN xlsx: nama berkas aman', FX.financeFileName(2026, 3, 'Takom Santa Maria') === 'keuangan_2026-03_takom-santa-maria.xlsx')
 console.log(`\nHASIL: ${ok} lulus, ${bad} gagal`); process.exit(bad ? 1 : 0)
