@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createSale, searchProducts } from './api'
 import { PrintSheet } from '../print/views'
@@ -10,6 +10,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { rupiah } from '../../shared/format'
 import { useDebounced } from '../../shared/hooks'
 import type { CartLine, Method, Product, SaleResult } from './types'
+import { printDirectNota } from '../../lib/webusb-printer'
 
 const DISCOUNTS = [0, 5, 10, 15, 20, 25]
 const dLabel = (d: number) => (d === 0 ? 'Tanpa diskon' : `${d}%`)
@@ -24,7 +25,7 @@ type Done = { sale: SaleResult; lines: CartLine[]; method: Method; cash: number;
 export default function PosPage() {
   const [step, setStep] = useState<Step>('items')
   const [q, setQ] = useState('')
-  const dq = useDebounced(q, 200)
+  const dq = useDebounced(q, 50) // Debounce dipercepat ke 50ms untuk pencarian lebih responsif
   const [cursor, setCursor] = useState(0)
   const [cart, setCart] = useState<CartLine[]>([])
   const [allDisc, setAllDisc] = useState<number | null>(null) // null = "diskon semua" mati
@@ -46,9 +47,18 @@ export default function PosPage() {
   const searchRef = useRef<HTMLInputElement>(null)
   const scanning = useRef(false)
 
-  const { data: products = [], isFetching } = useQuery({
+  const { data: rawProducts = [], isFetching } = useQuery({
     queryKey: ['products', dq], queryFn: () => searchProducts(dq), placeholderData: keepPreviousData,
   })
+
+  // In-Memory Filter untuk hasil pencarian instan pada ketikan kasir
+  const products = useMemo(() => {
+    if (!q.trim()) return rawProducts
+    const term = q.toLowerCase().trim()
+    return rawProducts.filter(
+      (p) => p.code.toLowerCase().includes(term) || p.name.toLowerCase().includes(term)
+    )
+  }, [rawProducts, q])
 
   const eff = (l: CartLine) => allDisc ?? l.disc
   const lineDisc = (l: CartLine) => Math.round((l.price * l.qty * eff(l)) / 100) // tampilan; server menghitung ulang
@@ -64,12 +74,23 @@ export default function PosPage() {
   useEffect(() => setCursor(0), [dq])
   useEffect(() => { if (step === 'items') searchRef.current?.focus() }, [step])
   useEffect(() => { document.querySelector(`[data-row="${cursor}"]`)?.scrollIntoView({ block: 'nearest' }) }, [cursor])
+
   useEffect(() => {
     if (!done) return
     if (!autoPrint) return // pengaturan komputer ini: cetak otomatis dimatikan
     setPrintKind('receipt') // otomatis hanya struk 80mm; nota A4 lewat tombol
+
+    // Jalankan Direct Print WebUSB jika printer USB terhubung, atau fallback ke window.print
+    const data = printData(done)
+    void printDirectNota({
+      storeName: data.branch || 'TOKO KASIR',
+      transNo: data.invoiceNo,
+      items: data.lines,
+      total: data.total,
+    })
+
     return triggerPrint({ shouldPrint: () => printGuard.current.once(done.sale.invoice_no) })
-  }, [done])
+  }, [done, autoPrint])
 
   function add(p: Product) {
     setCart((c) => {
@@ -115,7 +136,21 @@ export default function PosPage() {
       setError(e instanceof Error ? e.message : 'Transaksi gagal')
     } finally { setBusy(false) }
   }
-  function printAgain(k: 'receipt' | 'invoice') { setPrintKind(k); triggerPrint() }
+
+  function printAgain(k: 'receipt' | 'invoice') {
+    setPrintKind(k)
+    if (done && k === 'receipt') {
+      const data = printData(done)
+      void printDirectNota({
+        storeName: data.branch || 'TOKO KASIR',
+        transNo: data.invoiceNo,
+        items: data.lines,
+        total: data.total,
+      })
+    }
+    triggerPrint()
+  }
+
   function printData(d: Done): PrintData {
     const bid = activeBranchId ?? profile?.branch_id
     return {
