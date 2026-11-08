@@ -9,7 +9,9 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const cache = path.join(ROOT, 'node_modules', '.cache'); fs.mkdirSync(cache, { recursive: true })
 const out = path.join(cache, 'print-render-test.cjs') // di dalam proyek agar memakai React yang sama
 const entry = path.join(os.tmpdir(), 'print-entry.tsx')
-fs.writeFileSync(entry, `export * from '${ROOT}/src/features/print/views'; export * from '${ROOT}/src/features/print/templates'`)
+// Path Windows berisi "\" yang dimakan sebagai escape di dalam string JS; pakai "/" + JSON.stringify.
+const imp = (p) => JSON.stringify(p.replace(/\\/g, '/'))
+fs.writeFileSync(entry, `export * from ${imp(path.join(ROOT, 'src/features/print/views'))}; export * from ${imp(path.join(ROOT, 'src/features/print/templates'))}`)
 await build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'cjs', outfile: out, external: ['react', 'react-dom', 'react/jsx-runtime'], jsx: 'automatic',
   nodePaths: [path.join(ROOT, 'node_modules')], define: { 'import.meta.env.VITE_SUPABASE_URL': '"https://x.supabase.co"', 'import.meta.env.VITE_SUPABASE_ANON_KEY': '"x"' }, logLevel: 'silent' })
 const require = createRequire(path.join(ROOT, 'package.json'))

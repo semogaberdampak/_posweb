@@ -31,23 +31,20 @@ export async function requestUSBPrinter(): Promise<USBDevice | null> {
   }
 }
 
+/** Mencoba cetak langsung ke printer USB.
+ *  Mengembalikan true bila data benar-benar terkirim ke perangkat.
+ *  TIDAK memanggil window.print(); pemanggil yang memutuskan fallback agar tidak tercetak dua kali. */
 export async function printDirectNota(notaData: {
   storeName?: string
   transNo?: string
   items: Array<{ name: string; qty: number; price: number }>
   total: number
-}) {
+}): Promise<boolean> {
   try {
-    if (!('usb' in navigator)) {
-      window.print()
-      return
-    }
+    if (!('usb' in navigator)) return false
 
     const devices = await navigator.usb.getDevices()
-    if (devices.length === 0) {
-      window.print()
-      return
-    }
+    if (devices.length === 0) return false
 
     const device = devices[0]
     if (!device.opened) {
@@ -85,16 +82,17 @@ export async function printDirectNota(notaData: {
     text += `\x1d\x56\x41\x03` // Auto Cut
 
     const data = encoder.encode(text)
-    
+
     const targetInterface = device.configuration?.interfaces.find((i) =>
-      i.alternates.some((a) => a.endpoints.some((e) => e.direction === 'out'))
+      i.alternate.endpoints.some((e) => e.direction === 'out')
     )
     const endpointNumber =
-      targetInterface?.alternates[0]?.endpoints.find((e) => e.direction === 'out')?.endpointNumber || 1
+      targetInterface?.alternate.endpoints.find((e) => e.direction === 'out')?.endpointNumber || 1
 
-    await device.transferOut(endpointNumber, data)
+    const result = await device.transferOut(endpointNumber, data)
+    return result.status === 'ok'
   } catch (error) {
-    console.error('Direct print WebUSB gagal, menggunakan fallback browser print:', error)
-    window.print()
+    console.error('Direct print WebUSB gagal, memakai fallback cetak browser:', error)
+    return false
   }
 }

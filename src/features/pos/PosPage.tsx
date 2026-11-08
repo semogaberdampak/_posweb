@@ -40,6 +40,7 @@ export default function PosPage() {
   const [printKind, setPrintKind] = useState<'receipt' | 'invoice'>('receipt')
   const { autoPrint, thermalOnly } = usePrintPrefs()
   const printGuard = useRef(createPrintGuard())
+  const aliveRef = useRef(false) // false saat halaman ditinggalkan; mencegah cetak susulan di halaman lain
   const receiptCfg = useReceiptCfg(), invoiceCfg = useInvoiceCfg() // dimuat sejak halaman dibuka agar siap saat cetak
   const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: listBranches })
   const { activeBranchId, allBranches, profile } = useAuth()
@@ -71,7 +72,8 @@ export default function PosPage() {
 
   // ganti cabang aktif = mulai transaksi baru (cegah keranjang terbawa ke cabang lain)
   useEffect(() => { setCart([]); setStep('items'); setAllDisc(null); setMember(''); setMethod(null); setCash('') }, [activeBranchId])
-  useEffect(() => setCursor(0), [dq])
+  useEffect(() => { aliveRef.current = true; return () => { aliveRef.current = false } }, [])
+  useEffect(() => { setCursor(0) }, [dq])
   useEffect(() => { if (step === 'items') searchRef.current?.focus() }, [step])
   useEffect(() => { document.querySelector(`[data-row="${cursor}"]`)?.scrollIntoView({ block: 'nearest' }) }, [cursor])
 
@@ -80,16 +82,21 @@ export default function PosPage() {
     if (!autoPrint) return // pengaturan komputer ini: cetak otomatis dimatikan
     setPrintKind('receipt') // otomatis hanya struk 80mm; nota A4 lewat tombol
 
-    // Jalankan Direct Print WebUSB jika printer USB terhubung, atau fallback ke window.print
+    // Satu transaksi hanya dicetak otomatis sekali. Guard diklaim di sini agar render
+    // ganda (StrictMode) tidak mencetak dua kali, tetapi cetak tetap jalan setelah efek pertama.
+    if (!printGuard.current.once(done.sale.invoice_no)) return
+
     const data = printData(done)
+    // Coba printer USB lebih dulu; hanya bila tidak tersedia/gagal, pakai dialog cetak browser.
     void printDirectNota({
       storeName: data.branch || 'TOKO KASIR',
       transNo: data.invoiceNo,
       items: data.lines,
       total: data.total,
+    }).then((langsung) => {
+      if (!aliveRef.current) return // halaman sudah ditinggalkan: jangan cetak di halaman lain
+      if (!langsung) triggerPrint()
     })
-
-    return triggerPrint({ shouldPrint: () => printGuard.current.once(done.sale.invoice_no) })
   }, [done, autoPrint])
 
   function add(p: Product) {
@@ -137,18 +144,18 @@ export default function PosPage() {
     } finally { setBusy(false) }
   }
 
-  function printAgain(k: 'receipt' | 'invoice') {
+  async function printAgain(k: 'receipt' | 'invoice') {
     setPrintKind(k)
-    if (done && k === 'receipt') {
-      const data = printData(done)
-      void printDirectNota({
-        storeName: data.branch || 'TOKO KASIR',
-        transNo: data.invoiceNo,
-        items: data.lines,
-        total: data.total,
-      })
-    }
-    triggerPrint()
+    if (!done || k !== 'receipt') { triggerPrint(); return }
+
+    const data = printData(done)
+    const langsung = await printDirectNota({
+      storeName: data.branch || 'TOKO KASIR',
+      transNo: data.invoiceNo,
+      items: data.lines,
+      total: data.total,
+    })
+    if (!langsung) triggerPrint()
   }
 
   function printData(d: Done): PrintData {
