@@ -2,7 +2,7 @@ import { supabase } from '../../lib/supabase'
 
 export type UserRow = { id: string; email: string; full_name: string; branch_id: string | null; role_id: string | null; is_active: boolean }
 export type Role = { id: string; name: string; description: string | null; all_branches: boolean; is_system: boolean }
-export type Branch = { id: string; code: string; name: string; is_pusat: boolean }
+export type Branch = { id: string; code: string; name: string; is_pusat: boolean; short_name: string | null }
 export type Feature = { key: string; label: string }
 export type RolePerm = { feature_key: string; can_create: boolean; can_read: boolean; can_update: boolean; can_delete: boolean }
 export type UserPerm = { feature_key: string; can_create: boolean | null; can_read: boolean | null; can_update: boolean | null; can_delete: boolean | null }
@@ -19,7 +19,7 @@ export async function listRoles(): Promise<Role[]> {
   const { data } = await supabase.from('roles').select('id,name,description,all_branches,is_system').order('name'); return (data ?? []) as Role[]
 }
 export async function listBranches(): Promise<Branch[]> {
-  const { data } = await supabase.from('branches').select('id,code,name,is_pusat').eq('is_active', true).order('name'); return (data ?? []) as Branch[]
+  const { data } = await supabase.from('branches').select('id,code,name,is_pusat,short_name').eq('is_active', true).order('name'); return (data ?? []) as Branch[]
 }
 export async function listFeatures(): Promise<Feature[]> {
   const { data } = await supabase.from('features').select('key,label').order('label'); return (data ?? []) as Feature[]

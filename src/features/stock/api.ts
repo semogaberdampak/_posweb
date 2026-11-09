@@ -1,6 +1,6 @@
 import { supabase } from '../../lib/supabase'
 
-export type BranchStock = { branch_id: string; branch_code: string; branch_name: string; is_pusat: boolean; qty: number }
+export type BranchStock = { branch_id: string; branch_code: string; branch_name: string; branch_short: string; is_pusat: boolean; qty: number }
 
 /** Stok satu produk di SEMUA toko (nama cabang + jumlah saja). */
 export async function stockByBranch(productId: string): Promise<BranchStock[]> {

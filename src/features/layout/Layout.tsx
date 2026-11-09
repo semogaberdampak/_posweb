@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { listBranches } from '../users/api'
 import { ArrowLeftRight, Boxes, ClipboardCheck, DollarSign, LogOut, Moon, Package, Settings, FileText, ShieldCheck, ShoppingCart, Store, Sun, type LucideIcon } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
+import { TopProducts } from './TopProducts'
 import { useTheme } from '../settings/theme'
 
 const NAV: { to: string; label: string; feature: string; icon: LucideIcon; adminOnly?: boolean }[] = [
@@ -23,19 +24,21 @@ export default function Layout() {
   const actingElsewhere = allBranches && !!activeBranchId && activeBranchId !== profile?.branch_id
   const { theme, toggle } = useTheme()
   const branch = profile?.branch_name ?? '-'
+  const activeBranch = branches.find((b) => b.id === activeBranchId)
+  const topBranchLabel = allBranches ? (activeBranch?.short_name ?? activeBranch?.name ?? branch) : branch
+  const showTop = can('pos', 'r') || can('sales_recap', 'r')
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <aside className="z-20 hidden w-64 shrink-0 flex-col justify-between border-r border-border-muted bg-bg-light md:flex print:hidden">
-        <div>
-          <div className="flex items-center gap-3 border-b border-border-muted p-5">
+      <aside className="z-20 hidden w-52 shrink-0 xl:w-64 flex-col border-r border-border-muted bg-bg-light md:flex print:hidden">
+          <div className="flex shrink-0 items-center gap-3 border-b border-border-muted p-5">
             <div className="rounded-xl bg-primary p-2.5 text-on-primary shadow-lg shadow-primary/30"><Store className="h-6 w-6" /></div>
             <div>
               <h1 className="text-lg font-bold leading-none">POS Terintegrasi</h1>
               <span className="text-xs font-semibold uppercase tracking-wider text-primary">Supabase</span>
             </div>
           </div>
-          <nav className="max-h-[calc(100vh-220px)] space-y-1 overflow-y-auto p-3">
+          <nav className="min-h-16 space-y-1 overflow-y-auto p-3">
             {NAV.filter((n) => can(n.feature, 'r') && (!n.adminOnly || profile?.role_name === 'superadmin')).map(({ to, label, icon: Icon }) => (
               <NavLink key={to} to={to}
                 className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${isActive
@@ -45,8 +48,9 @@ export default function Layout() {
               </NavLink>
             ))}
           </nav>
-        </div>
-        <div className="space-y-2 border-t border-border-muted p-4">
+        {/* ruang kosong di antara menu dan kartu pengguna: produk terlaris (menyesuaikan tinggi & zoom) */}
+        <div className="min-h-0 flex-1 px-3 pb-2">{showTop && <TopProducts branchId={allBranches ? activeBranchId : null} branchLabel={topBranchLabel} />}</div>
+        <div className="shrink-0 space-y-2 border-t border-border-muted p-4">
           <div className="flex items-center gap-3 rounded-xl border border-border-muted bg-bg-dark p-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-full border border-primary/30 bg-primary/20 text-sm font-bold text-primary">
               {profile?.full_name.charAt(0).toUpperCase()}

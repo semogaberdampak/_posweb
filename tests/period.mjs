@@ -28,5 +28,6 @@ const prB = Object.fromEntries(P.presets(new Date('2026-11-07T17:30:00Z')).map((
 t('pintasan memakai hari WIB (00:30 WIB 8 Nov = "hari ini" 8 Nov, walau masih 7 Nov di UTC)', eq(prB['Hari ini'], ['2026-11-08', '2026-11-08']) && eq(prB['Kemarin'], ['2026-11-07', '2026-11-07']))
 t('semua pintasan lolos validasi', P.presets().every((x) => P.validate({ mode: 'range', from: x.from, to: x.to }) === null))
 t('defaultPeriod = bulan berjalan menurut WIB', eq(P.defaultPeriod(new Date('2026-11-30T18:00:00Z')), { mode: 'month', year: 2026, month: 12 }))
+t('yearRange: 1 Jan–31 Des; tahun kabisat = 366 hari tetap lolos validasi (batas database)', eq(P.yearRange(2026), { from: '2026-01-01', to: '2026-12-31' }) && P.validate({ mode: 'range', ...P.yearRange(2028) }) === null && P.daysBetween(P.yearRange(2028).from, P.yearRange(2028).to) + 1 === 366)
 t('daysBetween & slug', P.daysBetween('2026-01-01', '2026-01-08') === 7 && P.slug('Takom Santa Maria') === 'takom-santa-maria' && P.slug('###') === 'cabang')
 console.log(`\nHASIL: ${ok} lulus, ${bad} gagal`); process.exit(bad ? 1 : 0)

@@ -22,7 +22,8 @@
     "dev:vite": "vite",
     "test:finance": "node tests/finance.mjs",
     "test:escpos": "node tests/escpos.mjs",
-    "test:period": "node tests/period.mjs"
+    "test:period": "node tests/period.mjs",
+    "test:top": "node tests/top-products.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

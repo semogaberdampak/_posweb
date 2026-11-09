@@ -50,3 +50,11 @@ export async function fetchExport(from: string, to: string, branchId: string | n
   if (error) throw new Error(msg(error.message))
   return data as ExportData
 }
+
+export type TopProduct = { product_id: string; code: string; name: string; qty: number; trx: number }
+/** Produk terlaris (jumlah terjual, transaksi selesai) pada rentang tanggal WIB. branchId null = cabang milik user / semua yang boleh dilihat. */
+export async function fetchTopProducts(from: string, to: string, branchId: string | null, limit = 10): Promise<TopProduct[]> {
+  const { data, error } = await supabase.rpc('top_products', { p_from: from, p_to: to, p_branch: branchId, p_limit: limit })
+  if (error) throw new Error(msg(error.message))
+  return (data ?? []) as TopProduct[]
+}

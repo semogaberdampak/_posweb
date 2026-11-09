@@ -20,6 +20,7 @@ export function monthRange(year: number, month: number) {
   const from = `${year}-${pad(month)}-01`
   return { from, to: addDays(month === 12 ? `${year + 1}-01-01` : `${year}-${pad(month + 1)}-01`, -1) }
 }
+export const yearRange = (year: number) => ({ from: `${year}-01-01`, to: `${year}-12-31` })
 export const rangeOf = (p: Period) => (p.mode === 'month' ? monthRange(p.year, p.month) : { from: p.from, to: p.to })
 
 /** Pesan galat untuk periode yang tidak bisa diminta, atau null bila sah. */

@@ -119,6 +119,7 @@ export default function PosPage() {
       const sale = await createSale(lines, member, m, m === 'cash' ? cashNum : undefined, sellBranch)
       setDone({ sale, lines, method: m, cash: cashNum, member: member.trim(), at: new Date() })
       void qc.invalidateQueries({ queryKey: ['stock-branches'] })
+      void qc.invalidateQueries({ queryKey: ['top-products'] })
       setCart([]); setAllDisc(null); setMember(''); setMethod(null); setCash(''); setStep('items')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Transaksi gagal')
@@ -182,7 +183,7 @@ export default function PosPage() {
 
   return (
     <>
-      <div className="grid h-full grid-cols-[1fr_26rem] gap-4 p-4 print:hidden">
+      <div className="grid h-full grid-cols-[1fr_clamp(19rem,30vw,26rem)] gap-4 p-4 print:hidden">
         {/* ---- kiri: daftar produk (baris, bukan kartu) ---- */}
         <section className="flex min-h-0 flex-col gap-3">
           {done && (
@@ -199,15 +200,15 @@ export default function PosPage() {
           <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-border-muted">
             <table className="w-full text-left">
               <thead className="sticky top-0 bg-bg-dark">
-                <tr><th className="w-40 px-4 py-2">Kode produk</th><th className="px-4 py-2">Nama produk</th><th className="w-40 px-4 py-2 text-right">Harga</th></tr>
+                <tr><th className="w-36 whitespace-nowrap px-3 py-2">Kode produk</th><th className="px-3 py-2">Nama produk</th><th className="w-32 whitespace-nowrap px-3 py-2 text-right">Harga</th></tr>
               </thead>
               <tbody>
                 {products.map((p, i) => (
                   <tr key={p.id} data-row={i} onClick={() => { setCursor(i); add(p) }}
                     className={`cursor-pointer border-t border-border-muted ${i === cursor ? 'bg-primary/20' : 'hover:bg-highlight/25'}`}>
-                    <td className="px-4 py-2 font-mono">{p.code}</td>
-                    <td className="px-4 py-2">{p.name}</td>
-                    <td className="px-4 py-2 text-right">{rupiah(p.price)}</td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono">{p.code}</td>
+                    <td className="px-3 py-2">{p.name}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right">{rupiah(p.price)}</td>
                   </tr>
                 ))}
                 {products.length === 0 && <tr><td colSpan={3} className="px-4 py-6 text-center text-text-muted">Tidak ada produk</td></tr>}
@@ -215,8 +216,8 @@ export default function PosPage() {
             </table>
           </div>
           {products[cursor] && (
-            <div className="space-y-1 rounded-2xl bg-bg-light px-4 py-2 shadow-sm">
-              <div className="truncate text-sm text-text-muted">Stok: {products[cursor].name}</div>
+            <div className="space-y-1 rounded-2xl bg-bg-light px-3 py-1.5 shadow-sm">
+              <div className="truncate text-xs text-text-muted">Stok: {products[cursor].name}</div>
               <StockByBranch productId={products[cursor].id} />
             </div>
           )}
