@@ -22,15 +22,15 @@ export function useIdle(ms: number, onIdle: () => void, active: boolean) {
 }
 
 /** Tinggi elemen (px) yang terus diperbarui saat jendela / zoom browser berubah. */
-export function useElementHeight<T extends HTMLElement>() {
+export function useElementHeight<T extends HTMLElement>(box: 'content' | 'border' = 'content') {
   const ref = useRef<T>(null)
   const [h, setH] = useState(0)
   useEffect(() => {
     const el = ref.current
     if (!el || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(([e]) => setH(e.contentRect.height))
-    ro.observe(el)
+    const ro = new ResizeObserver(([e]) => setH(box === 'border' ? (e.borderBoxSize?.[0]?.blockSize ?? el.offsetHeight) : e.contentRect.height))
+    ro.observe(el, box === 'border' ? { box: 'border-box' } : undefined)
     return () => ro.disconnect()
-  }, [])
+  }, [box])
   return [ref, h] as const
 }

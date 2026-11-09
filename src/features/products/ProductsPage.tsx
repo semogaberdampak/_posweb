@@ -46,7 +46,7 @@ export default function ProductsPage() {
   return (
     <div className="flex h-full flex-col gap-3 p-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="mr-2 text-xl font-semibold">Produk & Harga</h1>
+        <h1 className="mr-2 text-xl font-semibold">Informasi Produk</h1>
         <input ref={searchRef} className="input max-w-md flex-1" placeholder="Cari kode / nama / pengarang (F2)" value={q}
           onChange={(e) => setQ(e.target.value)} maxLength={60} />
         <select className="input !w-auto" value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} aria-label="Status produk">

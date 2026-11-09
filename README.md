@@ -52,4 +52,4 @@ Setelah migrasi 005, pasang Edge Function `supabase/functions/create-user` (liha
 Catatan: dev di alamat yang dicetak `npm run dev` (bawaan http://127.0.0.1:3000/) . Di akar domain (Vercel) tanpa pengaturan tambahan; bila di subfolder isi `VITE_BASE=/_posweb/` (lihat .env.example). Tes tambahan: `npm run test:printing`, `npm run test:merge`.
 
 ## Keuangan & cetak USB
-Halaman **Keuangan** (`/keuangan`, butuh hak `finance`; laba butuh `cost_prices`). Tes: `npm run test:finance`, `npm run test:escpos`. Cetak USB langsung (eksperimental) diaktifkan di Pengaturan → Printer struk.
+Halaman **Keuangan** (`/keuangan`, butuh hak `finance`; laba butuh `cost_prices`). Tes: `npm run test:finance`, `npm run test:escpos`, `npm run test:sidebar`. Cetak USB langsung (eksperimental) diaktifkan di Pengaturan → Printer struk.

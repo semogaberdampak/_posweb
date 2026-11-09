@@ -23,7 +23,8 @@
     "test:finance": "node tests/finance.mjs",
     "test:escpos": "node tests/escpos.mjs",
     "test:period": "node tests/period.mjs",
-    "test:top": "node tests/top-products.mjs"
+    "test:top": "node tests/top-products.mjs",
+    "test:sidebar": "node tests/sidebar-layout.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
