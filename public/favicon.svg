@@ -1,5 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#8a5a1f"/>
-  <path d="M14 20h6l4 20h22l4-14H24" fill="none" stroke="#fdf3e3" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="27" cy="48" r="3.6" fill="#fdf3e3"/><circle cx="43" cy="48" r="3.6" fill="#fdf3e3"/>
+<!-- Favicon keranjang belanja -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" class="lucide lucide-shopping-cart">
+  <path d="M22 2h10v4H22zM7 2v4h10V2zm10 4h4v16h-4z"/><circle cx="32" cy="32" r="26" fill="none" stroke="#8a5a1f" stroke-width="5" stroke-linecap="round"/><line x1="24" y1="20" x2="24" y2="10"/><line x1="40" y1="20" x2="40" y2="10"/>
 </svg>

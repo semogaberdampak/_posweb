@@ -4,7 +4,12 @@ import { useAuth, type Action } from './AuthProvider'
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { session, profile, loading } = useAuth()
-  if (loading) return <div className="p-6">Memuat…</div>
+  if (loading) return (
+  <div className="p-6 flex items-center gap-2">
+    <div className="w-4 h-4 rounded-full border-2 border-border-muted border-t-primary animate-spin"/>
+    <span className="text-text-muted">Memuat…</span>
+  </div>
+)
   if (!session || !profile) return <Navigate to="/login" replace />
   return <>{children}</>
 }
