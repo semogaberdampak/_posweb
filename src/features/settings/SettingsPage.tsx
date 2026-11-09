@@ -11,7 +11,7 @@ function ChangePassword() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null); const [busy, setBusy] = useState(false)
   async function submit(e: FormEvent) {
     e.preventDefault(); setMsg(null)
-    if (a.length < 12) return setMsg({ ok: false, text: 'Kata sandi minimal 12 karakter.' })
+    if (a.length < 8) return setMsg({ ok: false, text: 'Kata sandi minimal 8 karakter.' })
     if (a !== b) return setMsg({ ok: false, text: 'Konfirmasi kata sandi tidak sama.' })
     setBusy(true)
     const { error } = await supabase.auth.updateUser({ password: a })

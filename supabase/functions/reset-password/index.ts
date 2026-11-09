@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
   try { b = await req.json() } catch { return json(400, { error: 'Data tidak valid' }) }
   const user_id = String(b.user_id ?? ''), password = String(b.password ?? '')
   if (!UUID.test(user_id)) return json(400, { error: 'Pengguna tidak valid' })
-  if (password.length < 12 || password.length > 72) return json(400, { error: 'Kata sandi 12–72 karakter' })
+  if (password.length < 8 || password.length > 20) return json(400, { error: 'Kata sandi 8–20 karakter' })
 
   const { data: target } = await admin.from('profiles').select('id, full_name').eq('id', user_id).maybeSingle()
   if (!target) return json(404, { error: 'Pengguna tidak ditemukan' })

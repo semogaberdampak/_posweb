@@ -13,7 +13,7 @@ export function NewUserModal({ roles, branches, onClose }: { roles: Role[]; bran
   async function submit(e: FormEvent) {
     e.preventDefault()
     if (!/^[a-z0-9._-]{2,40}$/.test(f.username)) return setErr('Username 2–40 karakter: huruf kecil, angka, titik, strip, garis bawah.')
-    if (f.password.length < 12) return setErr('Kata sandi minimal 12 karakter.')
+    if (f.password.length < 8) return setErr('Kata sandi minimal 8 karakter.')
     setBusy(true); setErr('')
     try { await createUser({ ...f, username: f.username.trim().toLowerCase() }); await qc.invalidateQueries({ queryKey: ['users'] }); onClose() }
     catch (x) { setErr(x instanceof Error ? x.message : 'Gagal.') } finally { setBusy(false) }

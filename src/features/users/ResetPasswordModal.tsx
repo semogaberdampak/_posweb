@@ -16,7 +16,7 @@ export function ResetPasswordModal({ user, onClose }: { user: UserRow; onClose: 
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (pw.length < 12) return setErr('Kata sandi minimal 12 karakter.')
+    if (pw.length < 8) return setErr('Kata sandi minimal 8 karakter.')
     setBusy(true); setErr('')
     try { await resetPassword(user.id, pw); setDone(true) }
     catch (x) { setErr(x instanceof Error ? x.message : 'Gagal.') } finally { setBusy(false) }

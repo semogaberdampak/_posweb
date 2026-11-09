@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
   const password = String(b.password ?? ''), role_id = String(b.role_id ?? ''), branch_id = String(b.branch_id ?? '')
   if (!full_name || full_name.length > 100) return json(400, { error: 'Nama wajib diisi (maks. 100 karakter)' })
   if (!USERNAME.test(username)) return json(400, { error: 'Username 2–40 karakter: huruf kecil, angka, titik, strip, garis bawah' })
-  if (password.length < 12 || password.length > 72) return json(400, { error: 'Kata sandi 12–72 karakter' })
+  if (password.length < 8 || password.length > 20) return json(400, { error: 'Kata sandi 8–20 karakter' })
   if (!UUID.test(role_id) || !UUID.test(branch_id)) return json(400, { error: 'Role/cabang tidak valid' })
 
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
