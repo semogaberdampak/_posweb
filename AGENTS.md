@@ -1,7 +1,7 @@
 # AGENTS.md — Konteks proyek POS Terintegrasi
 
 Dokumen serah-terima untuk agen/AI coding yang melanjutkan proyek ini. Baca SELURUHNYA sebelum mengubah apa pun.
-Terakhir diperbarui: 8 Nov 2026.
+Terakhir diperbarui: 9 Nov 2026.
 
 ## 1. Tentang proyek
 Aplikasi POS web terintegrasi (multi-cabang + pusat) untuk toko buku/rohani. Database Supabase (Postgres) terpusat.
@@ -140,7 +140,7 @@ Catatan lingkungan: shell sandbox kadang `sh` (tanpa brace expansion). Tailwind 
 3. Perbaikan data harga beli (lihat bagian Keuangan): isi `lastCost`/Price1 yang benar agar estimasi laba akurat.
 4. Halaman Cabang (tambah/nonaktifkan; saat ini cabang baru lewat SQL). Pengguna & Role SUDAH dibuat (lihat Status selesai) tetapi perlu diuji di Supabase sungguhan, termasuk Edge Function.
 5. Purchase Order (fitur `purchasing` ada, tabel/halaman belum) dan halaman Member (tabel `members` ada; kasir saat ini hanya mengetik nomor/nama).
-6. Hardening produksi: upgrade `react-router-dom` (npm audit moderat; JANGAN `npm audit fix --force`, itu memaksa lompat versi besar dan men-downgrade exceljs), header CSP/HSTS di hosting, MFA superadmin/keuangan, matikan sign-up publik di Supabase Auth, cadangan database.
+6. Hardening produksi: MFA superadmin/keuangan, matikan sign-up publik + aktifkan leaked password protection di Supabase Auth, cadangan database. (Header CSP/HSTS/Permissions-Policy sudah dipasang di `vercel.json`; `npm audit` moderat berasal dari `exceljs`→`uuid` — JANGAN `npm audit fix --force`.)
 
 ## 10. Pertanyaan terbuka (tanya pemilik, jangan menebak)
 - Konfirmasi pemilik untuk jalur stok awal di atas (hitung fisik per lokasi + impor per cabang). Cabang selain PUSAT harus ditambahkan dulu ke `branches` (butuh nama dan kode semua cabang).
@@ -227,3 +227,19 @@ Pemilik pindah ke agen lain karena kredit Claude gratis habis. Hal yang perlu di
 - **Menu yang tak muat disembunyikan (bukan digulir)**; tombol **burger** di header sidebar membuka daftar SEMUA menu (terlihat + tersembunyi), lencana = jumlah yang tersembunyi; Escape/klik di luar/memilih menu menutupnya. Layar pendek tanpa ruang kartu: kartu & pegangan hilang, menu mengisi ruang (≥2 terlihat).
 - Hitungan: `computeSidebarLayout` (murni, `tests/sidebar-layout.mjs`: 18 skenario) memakai tinggi border-box sidebar/logo/kartu pengguna (`useElementHeight('border')`); konstanta dalam rem (tombol menu 2,75rem, padding nav 1,5rem, pegangan 0,75rem). Pembungkus kartu `box-border pb-2`, jadi minimum pembungkus = 7rem isi + 0,5rem.
 - Tes browser (`tests/ui-smoke.mjs`, 31 pemeriksaan): tarik naik/turun, tepat 2 menu, lencana, burger (semua menu, Escape, pindah halaman), simpan setelah muat ulang, klik ganda, papan ketik, layar pendek.
+
+## Sesi 9 Nov 2026 — audit keamanan + idempotensi bayar (belum di-commit)
+**Audit awal:** `npm run build` EXIT=0, 12 skrip tes lulus. Temuan diperbaiki hari itu:
+1. **`vercel.json`**: CSP + Permissions-Policy (sebelumnya tidak ada). `connect-src`/`wss` hanya ke project Supabase (`koerpzbwkfejfrhervxa.supabase.co`); `script-src 'self'`; `style-src` masih `'unsafe-inline'` (lihat sisa saran).
+2. **`supabase/schema.sql` kini bootstrap-only**: blok `do $$ ... to_regclass('public.profiles') ... raise exception ... $$` di awal + komentar "versi AWAL, versi berlaku = migrasi 004/005/008/017" pada `has_perm`, `create_sale`, `adjust_stock`. Sengaja TIDAK menyalin migrasi ke dalamnya (akan bentrok dengan `create_sale` 4-arg 003 dan menambah drift). Catatan: skrip ini memang sudah gagal duluan di `create type` bila diulang; penjaga membuat pesannya jelas dan menjamin tidak ada DDL berjalan.
+3. **CORS Edge Function `create-user` & `reset-password` gagal-tertutup**: `ALLOWED_ORIGIN` dibaca sebagai daftar (boleh dipisah koma); kosong → **503**, origin asing → **403**, `Vary: Origin`, dan `cors`/`json` dipindah ke dalam handler (dulu dievaluasi saat modul dimuat). Ini mengubah perilaku deploy: tanpa secret, kedua fungsi mati.
+4. **Idempotensi bayar (migrasi 017)** — `supabase/manual_migrations/017_sale_idempotency.sql`: kolom `sales.request_id` + indeks unik parsial (`where request_id is not null`), `create_sale(..., p_request_id uuid)` dengan `pg_advisory_xact_lock(hashtextextended(...))`, kunci terikat `cashier_id = auth.uid()` (kasir lain yang memakai kunci sama ditolak), transaksi lama dikembalikan utuh; signature 4/5-argumen lama di-`drop` agar tidak ambigu. Frontend: `newRequestId()` di `src/features/pos/api.ts` (fallback UUID v4 via `crypto.getRandomValues`) dan ref `attempt` di `PosPage.pay()` — kunci dipakai ulang bila keranjang/metode/uang sama (retry aman), kunci baru bila isi berubah, dibuang setelah sukses.
+**Verifikasi:** `test:sql` (stok 19→18→18, 1 baris berkunci, kasir lain ditolak, tanpa kunci tetap jalan, 017 diulang aman), `test:e2e` 94 lulus, `test:finance` 23 lulus, `test:top`, `test:merge` PASS, `build` EXIT=0, penjaga `schema.sql` diuji via PGlite sementara (jalankan kedua ditolak). Edge Function hanya lolos cek sintaks esbuild — **Deno tidak terpasang di mesin ini**, belum diuji di Supabase.
+**Urutan deploy yang benar:** jalankan migrasi 017 di Supabase → tempel ulang kedua Edge Function + isi secret `ALLOWED_ORIGIN` → deploy web baru (frontend baru akan galat `create_sale` bila DB belum 017; frontend lama tetap aman dengan fungsi baru).
+**Sisa saran (sudah dikalibrasi ulang, urut dampak):**
+1. Auth produksi: matikan sign-up publik (akun dibuat admin via Edge Function), aktifkan leaked password protection, opsional turunkan rate limit token endpoint (default 150/5 menit per IP — jangan terlalu ketat karena kasir satu kantor berbagi IP). CAPTCHA tidak disarankan (butuh `captchaToken` di `LoginPage`).
+2. `members_r` tidak dibatasi cabang — dampak kecil: tabel hanya `id, member_no, name, is_active` (tanpa telepon/alamat), frontend tidak membacanya (kasir mengetik nomor → RPC). "Batasi per cabang" butuh kolom `branch_id` + backfill; opsi murah = filter `is_active`.
+3. `print_templates_r using (true)` **bukan celah**: isinya tata letak struk/nota (data yang memang dicetak); penulisan sudah dibatasi RPC superadmin + revoke.
+4. Perf: `index` 579 kB (165 kB gzip), `exceljs` 939 kB (270 kB gzip) sudah lazy. `FinancePage.tsx` mengimpor statis `METHOD` dari `exportFinance` sehingga modul itu dobel (~2 kB gzip) — pindahkan `METHOD` ke file kecil bila kebetulan menyentuh file itu. Bukan prioritas.
+5. CSP `style-src 'unsafe-inline'`: hanya satu penghalang nyata — `<style>` `@page` di `src/features/print/views.tsx:94` (React `style={{}}` tidak terpengaruh CSP karena lewat CSSOM). Bisa dilepas dengan `CSSStyleSheet.insertRule` + `adoptedStyleSheets`, wajib diuji cetak 80mm/A4 (Chrome tidak tersedia di sandbox). Nilai tambah kecil: vektor skrip sudah ditutup `script-src 'self'`.
+6. `tests/ui-smoke.mjs` tetap manual (butuh `playwright` + server vite, lihat header file); belum layak jadi skrip `npm test`.
