@@ -17,7 +17,9 @@ Fitur baru = folder baru + 1 baris di tabel `features` (SQL) + 1 route di `App.t
 ## Aturan keamanan
 - Hanya anon key di frontend. `service_role` TIDAK PERNAH di repo/frontend.
 - Hak akses ditegakkan di database (RLS/RPC); guard di React hanya UX.
-- Produksi: pasang header CSP/HSTS di hosting, aktifkan MFA dan matikan sign-up publik di Supabase Auth.
+- Header keamanan (CSP, HSTS, X-Frame-Options, Permissions-Policy) sudah diatur di `vercel.json`; setelah deploy, pastikan tidak ada yang diblokir di konsol browser.
+- Edge Function `create-user`/`reset-password` menolak semua permintaan sampai secret `ALLOWED_ORIGIN` diisi dengan alamat web aplikasi (mis. `https://pos.takom.id`).
+- Produksi: aktifkan MFA dan matikan sign-up publik di Supabase Auth.
 
 ## Impor produk dari Excel (sekali jalan)
 1. SQL Editor → jalankan `supabase/manual_migrations/002_products_import.sql`.
@@ -27,7 +29,8 @@ Fitur baru = folder baru + 1 baris di tabel `features` (SQL) + 1 route di `App.t
 Kolom Excel: A kode, B nama, O harga, AK pengarang; kolom lain tersimpan di `attributes` dan tampil sebagai card.
 
 ## Urutan migrasi database
-`schema.sql` → `manual_migrations/002_products_import.sql` → `003_costs_and_line_discount.sql` → `004_stock_views.sql` → `005_user_permissions.sql` → `006_email_domain.sql` → `007_revoke_sessions.sql` → `008_active_branch.sql` → `009_stock_tools.sql` → `010_print_templates.sql` → `011_sales_recap.sql` → `012_sales_export.sql` → `013_stock_move.sql` → `014_finance.sql` → `015_report_range.sql` → `016_branch_short_top_products.sql`
+`schema.sql` → `manual_migrations/002_products_import.sql` → `003_costs_and_line_discount.sql` → `004_stock_views.sql` → `005_user_permissions.sql` → `006_email_domain.sql` → `007_revoke_sessions.sql` → `008_active_branch.sql` → `009_stock_tools.sql` → `010_print_templates.sql` → `011_sales_recap.sql` → `012_sales_export.sql` → `013_stock_move.sql` → `014_finance.sql` → `015_report_range.sql` → `016_branch_short_top_products.sql` → `017_sale_idempotency.sql`
+(`schema.sql` hanya untuk database kosong; ada penjaganya, jangan dijalankan ulang setelah migrasi.)
 (003: harga beli dipindah ke tabel rahasia `product_costs`, dan diskon per produk).
 
 ## Stok awal dari Excel (kolom stokOnHand)

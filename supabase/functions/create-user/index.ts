@@ -2,14 +2,22 @@
 // Kunci service_role disediakan otomatis oleh Supabase sebagai env SUPABASE_SERVICE_ROLE_KEY — TIDAK pernah ada di repo/frontend.
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-const origin = Deno.env.get('ALLOWED_ORIGIN') ?? '*' // isi dengan alamat web aplikasi saat produksi
-const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' }
-const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
+// CORS: hanya origin aplikasi yang dilayani. Isi secret ALLOWED_ORIGIN (mis. https://pos.takom.id);
+// beberapa origin dipisah koma. Bila secret belum diisi, fungsi MENOLAK permintaan (fail-closed) —
+// bukan lagi diam-diam terbuka untuk semua situs seperti default '*'.
+const ALLOWED = (Deno.env.get('ALLOWED_ORIGIN') ?? '').split(',').map((s) => s.trim()).filter(Boolean)
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const DOMAIN = (Deno.env.get('EMAIL_DOMAIN') ?? 'takom.id').toLowerCase() // samakan dengan migrasi 006
 const USERNAME = /^[a-z0-9._-]{2,40}$/
 
 Deno.serve(async (req) => {
+  const origin = req.headers.get('origin') ?? ''
+  const cors: Record<string, string> = { 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS', Vary: 'Origin' }
+  if (origin && ALLOWED.includes(origin)) cors['Access-Control-Allow-Origin'] = origin
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
+
+  if (ALLOWED.length === 0) return json(503, { error: 'Server belum dikonfigurasi: secret ALLOWED_ORIGIN belum diisi' })
+  if (origin && !ALLOWED.includes(origin)) return json(403, { error: 'Origin tidak diizinkan' })
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
   if (req.method !== 'POST') return json(405, { error: 'Metode tidak diizinkan' })
 

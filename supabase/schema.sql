@@ -2,8 +2,18 @@
 -- POS TERINTEGRASI - Supabase schema v1
 -- Harga: global (1 harga untuk semua cabang). Stok: per cabang.
 -- Prinsip: semua aturan dijaga di DATABASE (RLS + RPC), bukan di UI.
--- Jalankan di Supabase SQL Editor. Aman dijalankan ulang di DB kosong.
+-- HANYA untuk instalasi baru (database kosong), sekali jalan. Setelah migrasi 002..017
+-- dipasang, JANGAN jalankan file ini lagi — perbarui lewat supabase/manual_migrations/.
+-- Beberapa definisi di bawah sengaja berupa versi AWAL dan sudah digantikan migrasi
+-- (lihat penunjuk di tiap fungsi); penjaga di bawah mencegah file ini menimpa versi terbaru.
 -- =====================================================================
+
+do $$
+begin
+  if to_regclass('public.profiles') is not null then
+    raise exception 'schema.sql hanya untuk database kosong. Database ini sudah berisi tabel: perbarui lewat supabase/manual_migrations (002..017), bukan dengan menjalankan schema.sql lagi.';
+  end if;
+end $$;
 
 create extension if not exists pg_trgm;
 
@@ -53,6 +63,7 @@ create table profiles (
 );
 
 -- ---------- HELPER OTORISASI ----------
+-- Versi AWAL (hak per role saja). Versi berlaku: migrasi 005 (menambah pengecualian per user).
 create or replace function has_perm(p_feature text, p_action text)
 returns boolean language sql stable security definer set search_path = public as $$
   select coalesce((
@@ -194,6 +205,7 @@ create table audit_log (
 -- =====================================================================
 -- RPC TRANSAKSI (security definer; harga/diskon/cabang dihitung di server)
 -- =====================================================================
+-- Versi AWAL. Versi berlaku: migrasi 008 (cabang aktif + diskon per baris) dan 017 (idempotensi).
 create or replace function create_sale(
   p_items         jsonb,
   p_discount_pct  int,
@@ -304,6 +316,7 @@ begin
   values (auth.uid(), 'sale.void', 'sales', p_sale::text, jsonb_build_object('reason', p_reason));
 end $$;
 
+-- Versi AWAL (tanpa cek cabang). Versi berlaku: migrasi 004 (menambah can_see_branch).
 create or replace function adjust_stock(p_branch uuid, p_product uuid, p_delta int, p_reason text)
 returns void language plpgsql security definer set search_path = public as $$
 begin

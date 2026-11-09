@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createSale, searchProducts } from './api'
+import { createSale, newRequestId, searchProducts } from './api'
 import { PrintSheet } from '../print/views'
 import { createPrintGuard, triggerPrint, usePrintPrefs } from '../print/printing'
 import { printDirect } from '../../lib/webusb-printer'
@@ -47,6 +47,7 @@ export default function PosPage() {
   const sellBranch = allBranches && activeBranchId && activeBranchId !== profile?.branch_id ? activeBranchId : undefined
   const searchRef = useRef<HTMLInputElement>(null)
   const scanning = useRef(false)
+  const attempt = useRef<{ key: string; id: string } | null>(null) // kunci idempotensi percobaan bayar berjalan
 
   const { data: rawProducts = [], isFetching } = useQuery({
     queryKey: ['products', dq], queryFn: () => searchProducts(dq), placeholderData: keepPreviousData,
@@ -115,8 +116,13 @@ export default function PosPage() {
     if (busy || cart.length === 0) return
     setBusy(true); setError('')
     const lines = cart.map((l) => ({ ...l, disc: eff(l) }))
+    // Kunci yang sama dipakai ulang bila percobaan sebelumnya gagal dengan keranjang/metode yang sama,
+    // sehingga retry (koneksi putus) mengembalikan transaksi yang sudah ada, bukan membuat yang kedua.
+    const key = JSON.stringify([lines.map((l) => [l.id, l.qty, l.disc]), member.trim(), m, m === 'cash' ? cashNum : null, sellBranch ?? null])
+    if (attempt.current?.key !== key) attempt.current = { key, id: newRequestId() }
     try {
-      const sale = await createSale(lines, member, m, m === 'cash' ? cashNum : undefined, sellBranch)
+      const sale = await createSale(lines, member, m, m === 'cash' ? cashNum : undefined, sellBranch, attempt.current.id)
+      attempt.current = null
       setDone({ sale, lines, method: m, cash: cashNum, member: member.trim(), at: new Date() })
       void qc.invalidateQueries({ queryKey: ['stock-branches'] })
       void qc.invalidateQueries({ queryKey: ['top-products'] })

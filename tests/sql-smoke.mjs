@@ -133,6 +133,22 @@ console.log('kasir jual cabang lain (CAB1) ditolak:', await sale5(1, cab1))
 console.log('kasir jual cabangnya sendiri (null)  :', await sale5(1, null))
 console.log('cabang tidak valid ditolak           :', await sale5(5, '00000000-0000-0000-0000-0000000000aa'))
 console.log('sales tercatat di cabang?            :', JSON.stringify(await q(`select b.code, count(*)::int n from sales s join branches b on b.id=s.branch_id group by 1 order by 1`)))
+// ===== uji 017: idempotensi create_sale =====
+await run('017', sql('supabase/manual_migrations/017_sale_idempotency.sql'))
+await run('017 ulang', sql('supabase/manual_migrations/017_sale_idempotency.sql'))
+const rid = '11111111-1111-4111-8111-111111111111'
+const saleIdem = async (n, key) => {
+  try { return JSON.stringify((await as(n, `select create_sale('${items([{product_id:A,qty:1,discount_pct:0}])}'::jsonb, null, 'qris', null, null, ${key ? `'${key}'` : 'null'}) as r`))[0].r) }
+  catch (e) { return 'ERR: ' + e.message }
+}
+const pusat0 = await stockAt('A1','PUSAT')
+const idem1 = await saleIdem(5, rid), pusat1 = await stockAt('A1','PUSAT')
+const idem2 = await saleIdem(5, rid), pusat2 = await stockAt('A1','PUSAT')
+console.log('idem kirim ulang kunci sama       :', idem1 === idem2, '| stok PUSAT', pusat0, '->', pusat1, '->', pusat2, '(harus turun 1 saja)')
+console.log('idem baris bertanda kunci itu     :', JSON.stringify(await q(`select count(*)::int n from sales where request_id = '${rid}'`)), '(harus 1)')
+console.log('idem kunci sama oleh kasir lain   :', await saleIdem(1, rid))
+console.log('idem tanpa kunci tetap bisa       :', (await saleIdem(5, null)).slice(0, 26) + '…')
+
 // status migrasi (dipakai juga untuk panduan pemilik)
 console.log('STATUS:', JSON.stringify(await q(`
  select '002' as migrasi, exists(select 1 from information_schema.columns where table_name='products' and column_name='author') as sudah
@@ -141,4 +157,5 @@ console.log('STATUS:', JSON.stringify(await q(`
  union all select '005', to_regclass('public.user_permissions') is not null
  union all select '006', exists(select 1 from pg_trigger where tgname='enforce_email_domain')
  union all select '007', to_regprocedure('public.revoke_user_sessions(uuid)') is not null
- union all select '008', to_regprocedure('public.my_scope()') is not null`)))
+ union all select '008', to_regprocedure('public.my_scope()') is not null
+ union all select '017', exists(select 1 from information_schema.columns where table_name='sales' and column_name='request_id')`)))
