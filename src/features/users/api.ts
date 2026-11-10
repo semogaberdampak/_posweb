@@ -35,7 +35,8 @@ export const setRolePerm = (role: string, feature: string, c: boolean, r: boolea
   rpc('set_role_permission', { p_role: role, p_feature: feature, p_c: c, p_r: r, p_u: u, p_d: d })
 export const setUserPerm = (user: string, feature: string, c: Tri, r: Tri, u: Tri, d: Tri) =>
   rpc('set_user_permission', { p_user: user, p_feature: feature, p_c: c, p_r: r, p_u: u, p_d: d })
-export const setUserRole = (user: string, role: string, branch: string) => rpc('set_user_role', { p_user: user, p_role: role, p_branch: branch })
+// branch null = Global (hanya untuk role lintas cabang; server menolak bila role wajib cabang)
+export const setUserRole = (user: string, role: string, branch: string | null) => rpc('set_user_role', { p_user: user, p_role: role, p_branch: branch })
 export const setUserActive = (user: string, active: boolean) => rpc('set_user_active', { p_user: user, p_active: active })
 export const createRole = (name: string, desc: string, allBranches: boolean) => rpc('create_role', { p_name: name, p_desc: desc, p_all_branches: allBranches })
 
@@ -71,7 +72,7 @@ async function invokeFn(name: string, body: Record<string, unknown>, fallback: s
 }
 
 /** Membuat akun login butuh kunci rahasia, jadi dikerjakan Edge Function `create-user` (lihat supabase/functions). */
-export const createUser = (body: { full_name: string; username: string; password: string; role_id: string; branch_id: string }) =>
+export const createUser = (body: { full_name: string; username: string; password: string; role_id: string; branch_id: string | null }) =>
   invokeFn('create-user', body, 'Gagal membuat pengguna. Pastikan fungsi create-user sudah dipasang di Supabase.')
 
 /** Hanya superadmin (dicek di Edge Function `reset-password`). */

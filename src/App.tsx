@@ -1,6 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import LoginPage from './features/auth/LoginPage'
-import { RequireAuth, RequirePerm } from './features/auth/guards'
+import { RequireAuth, RequireKasir, RequirePerm } from './features/auth/guards'
 import Layout from './features/layout/Layout'
 import PosPage from './features/pos/PosPage'
 import ProductsPage from './features/products/ProductsPage'
@@ -26,7 +26,7 @@ export default function App() {
           <Route path="/mutasi-stok" element={<RequirePerm feature="stock_move"><StockMovePage /></RequirePerm>} />
           <Route path="/stok" element={<RequirePerm feature="stock"><StockPage /></RequirePerm>} />
           <Route path="/laporan" element={<RequirePerm feature="sales_recap"><SalesRecapPage /></RequirePerm>} />
-          <Route path="/tutup-kasir" element={<RequirePerm feature="daily_close"><DailyClosePage /></RequirePerm>} />
+          <Route path="/tutup-kasir" element={<RequireKasir><DailyClosePage /></RequireKasir>} />
           <Route path="/keuangan" element={<RequirePerm feature="finance"><FinancePage /></RequirePerm>} />
           <Route path="/pengguna" element={<RequirePerm feature="users"><UsersPage /></RequirePerm>} />
           <Route path="/format-nota" element={<RequirePerm feature="settings"><FormatNotaPage /></RequirePerm>} />

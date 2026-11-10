@@ -264,7 +264,8 @@ check('TUTUP: tanggal tanpa transaksi & tanggal yang belum terjadi ditolak',
   /belum ada transaksi/.test(await err(KR.KRANGGAN, `select close_day(null,'2000-02-01',0,null)`) ?? '') &&
   /belum terjadi/.test(await err(KR.KRANGGAN, `select close_day(null,'2100-01-01',0,null)`) ?? ''))
 check('TUTUP: keuangan hanya boleh melihat, pengadaan ditolak',
-  /forbidden/.test(await err(KEU, `select close_day(null,'${hariIni}',0,null)`) ?? '') &&
+  // migrasi 020: menutup HANYA role kasir (pesan khusus, bukan lagi 'forbidden')
+  /hanya kasir/.test(await err(KEU, `select close_day(null,'${hariIni}',0,null)`) ?? '') &&
   (await tutupSum(KEU, null)).totals.count >= 0 && /forbidden/.test(await err(PENG, `select daily_close_summary(null,'${hariIni}')`) ?? ''))
 check('TUTUP: tulis langsung ke tabel ditolak', !!(await err(KR.KRANGGAN, `insert into daily_closings(branch_id, close_date, closed_by) values ('${B.KRANGGAN}','2000-01-01','${KR.KRANGGAN}')`)))
 

@@ -23,7 +23,8 @@ export default function Layout() {
   const { profile, can, allBranches, activeBranchId, setActiveBranchId } = useAuth()
   const isKasir = profile?.role_name === 'kasir' // tombol Tutup Kasir di header khusus role kasir
   const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: listBranches, enabled: allBranches })
-  const actingElsewhere = allBranches && !!activeBranchId && activeBranchId !== profile?.branch_id
+  // Akun Global (branch_id null) tidak pernah "bertindak sebagai cabang lain"
+  const actingElsewhere = allBranches && !!profile?.branch_id && !!activeBranchId && activeBranchId !== profile.branch_id
   const { theme, toggle } = useTheme()
   const branch = profile?.branch_name ?? '-'
   const activeBranch = branches.find((b) => b.id === activeBranchId)
@@ -32,8 +33,9 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar items={NAV.filter((n) => can(n.feature, 'r') && (!n.adminOnly || profile?.role_name === 'superadmin')
-          && !(n.feature === 'daily_close' && isKasir)).map(({ to, label, icon }) => ({ to, label, icon }))}
+      <Sidebar        items={NAV.filter((n) => can(n.feature, 'r') && (!n.adminOnly || profile?.role_name === 'superadmin')
+          // Tutup kasir hanya untuk role kasir: lainnya memakai kolom & pemberitahuan di Rekap Penjualan
+          && !(n.feature === 'daily_close' && !isKasir)).map(({ to, label, icon }) => ({ to, label, icon }))}
         showTop={showTop} branchId={allBranches ? activeBranchId : null} branchLabel={topBranchLabel} />
 
       <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">

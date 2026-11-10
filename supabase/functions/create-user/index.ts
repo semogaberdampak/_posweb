@@ -35,25 +35,31 @@ Deno.serve(async (req) => {
   try { b = await req.json() } catch { return json(400, { error: 'Data tidak valid' }) }
   const full_name = String(b.full_name ?? '').trim(), username = String(b.username ?? '').trim().toLowerCase()
   const email = `${username}@${DOMAIN}`
-  const password = String(b.password ?? ''), role_id = String(b.role_id ?? ''), branch_id = String(b.branch_id ?? '')
+  const password = String(b.password ?? ''), role_id = String(b.role_id ?? '')
+  // "Global" = branch_id kosong/null (hanya untuk role lintas cabang); kasir wajib punya cabang.
+  const branch_id = String(b.branch_id ?? '').trim()
   if (!full_name || full_name.length > 100) return json(400, { error: 'Nama wajib diisi (maks. 100 karakter)' })
   if (!USERNAME.test(username)) return json(400, { error: 'Username 2–40 karakter: huruf kecil, angka, titik, strip, garis bawah' })
   if (password.length < 8 || password.length > 20) return json(400, { error: 'Kata sandi 8–20 karakter' })
-  if (!UUID.test(role_id) || !UUID.test(branch_id)) return json(400, { error: 'Role/cabang tidak valid' })
+  if (!UUID.test(role_id)) return json(400, { error: 'Role tidak valid' })
+  if (branch_id && !UUID.test(branch_id)) return json(400, { error: 'Cabang tidak valid' })
 
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
-  const { data: role } = await admin.from('roles').select('name').eq('id', role_id).maybeSingle()
+  const { data: role } = await admin.from('roles').select('name,all_branches').eq('id', role_id).maybeSingle()
   if (!role) return json(400, { error: 'Role tidak ditemukan' })
   if (role.name === 'superadmin') return json(403, { error: 'Superadmin dibuat manual lewat SQL, bukan dari aplikasi' })
-  const { data: branch } = await admin.from('branches').select('id').eq('id', branch_id).eq('is_active', true).maybeSingle()
-  if (!branch) return json(400, { error: 'Cabang tidak valid' })
+  if (!branch_id && !role.all_branches) return json(400, { error: 'Role ini wajib punya cabang (hanya role lintas cabang yang boleh Global)' })
+  if (branch_id) {
+    const { data: branch } = await admin.from('branches').select('id').eq('id', branch_id).eq('is_active', true).maybeSingle()
+    if (!branch) return json(400, { error: 'Cabang tidak valid' })
+  }
 
   const { data: created, error: e1 } = await admin.auth.admin.createUser({ email, password, email_confirm: true })
   if (e1 || !created.user) return json(400, { error: /already|registered/i.test(e1?.message ?? '') ? 'Email sudah terdaftar' : 'Gagal membuat akun' })
 
-  const { error: e2 } = await admin.from('profiles').insert({ id: created.user.id, full_name, branch_id, role_id, is_active: true })
+  const { error: e2 } = await admin.from('profiles').insert({ id: created.user.id, full_name, branch_id: branch_id || null, role_id, is_active: true })
   if (e2) { await admin.auth.admin.deleteUser(created.user.id); return json(500, { error: 'Gagal membuat profil; akun dibatalkan' }) }
 
-  await admin.from('audit_log').insert({ actor_id: me.user?.id ?? null, action: 'user.create', entity: 'profiles', entity_id: created.user.id, detail: { email, role: role.name } })
+  await admin.from('audit_log').insert({ actor_id: me.user?.id ?? null, action: 'user.create', entity: 'profiles', entity_id: created.user.id, detail: { email, role: role.name, branch: branch_id || 'GLOBAL' } })
   return json(200, { id: created.user.id })
 })

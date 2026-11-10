@@ -30,7 +30,7 @@ export default function UsersPage() {
   const user = users.data?.find((u) => u.id === userId)
   const role = roles.data?.find((r) => r.id === roleId)
   const roleName = (id: string | null) => roles.data?.find((r) => r.id === id)?.name ?? '-'
-  const branchName = (id: string | null) => branches.data?.find((b) => b.id === id)?.name ?? '-'
+  const branchName = (id: string | null) => branches.data?.find((b) => b.id === id)?.name ?? 'Global'
 
   const rp = useQuery({ queryKey: ['role-perms', roleId], queryFn: () => api.rolePerms(roleId!), enabled: !!roleId && tab === 'roles' })
   const urp = useQuery({ queryKey: ['role-perms', user?.role_id], queryFn: () => api.rolePerms(user!.role_id!), enabled: !!user?.role_id && tab === 'users' })
@@ -72,9 +72,15 @@ export default function UsersPage() {
               <>
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="mr-auto"><div className="text-lg font-semibold">{user.full_name}</div><div className="text-sm text-text-muted">{user.email}</div></div>
-                  <label className="text-sm">Role<select className="input mt-1" disabled={lockedUser} value={user.role_id ?? ''} onChange={(e) => run(() => api.setUserRole(user.id, e.target.value, user.branch_id!), [['users']])}>
+                  <label className="text-sm">Role<select className="input mt-1" disabled={lockedUser} value={user.role_id ?? ''} onChange={(e) => {
+                    const nr = roles.data?.find((r) => r.id === e.target.value)
+                    // role lintas cabang → Global (null); role satu cabang → pakai cabang lama / cabang pertama
+                    const br = nr?.all_branches ? null : user.branch_id ?? branches.data?.[0]?.id ?? null
+                    run(() => api.setUserRole(user.id, e.target.value, br), [['users']])
+                  }}>
                     {(roles.data ?? []).filter((r) => r.name !== 'superadmin' || r.id === user.role_id).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-                  <label className="text-sm">Cabang<select className="input mt-1" disabled={lockedUser} value={user.branch_id ?? ''} onChange={(e) => run(() => api.setUserRole(user.id, user.role_id!, e.target.value), [['users']])}>
+                  <label className="text-sm">Cabang<select className="input mt-1" disabled={lockedUser} value={user.branch_id ?? ''} onChange={(e) => run(() => api.setUserRole(user.id, user.role_id!, e.target.value || null), [['users']])}>
+                    {roles.data?.find((r) => r.id === user.role_id)?.all_branches && <option value="">Global (semua cabang)</option>}
                     {(branches.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
                   <button className="btn-ghost" disabled={lockedUser} onClick={() => run(() => api.setUserActive(user.id, !user.is_active), [['users']])}>{user.is_active ? 'Nonaktifkan' : 'Aktifkan'}</button>
                   {isSuperAdmin && <button className="btn-ghost" onClick={() => setReset(user)}>Reset kata sandi</button>}

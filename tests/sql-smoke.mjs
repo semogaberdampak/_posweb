@@ -191,6 +191,22 @@ console.log('STATUS-TUTUP: rentang terbalik ditolak              :', await call(
 const cSnap = (await q(`select coalesce(sum(total_count),0)::int c, coalesce(sum(net),0)::int n from daily_closings where branch_id = '${pusat}' and close_date = '${today}'`))[0]
 console.log('STATUS-TUTUP: angka = snapshot penutupan            :', cPusat.count === cSnap.c && Number(cPusat.net) === cSnap.n)
 
+// ===== uji 020: tutup kasir HANYA role kasir + cabang Global =====
+await run('020', sql('supabase/manual_migrations/020_kasir_only_global_branch.sql'))
+await run('020 ulang (idempoten)', sql('supabase/manual_migrations/020_kasir_only_global_branch.sql'))
+const keuanganRole = (await q(`select id from roles where name='keuangan'`))[0].id
+const roleCan = async (name) => (await q(`select can_create from role_permissions rp join roles r on r.id=rp.role_id
+  where r.name='${name}' and rp.feature_key='daily_close'`))[0]?.can_create
+console.log('KASIR-ONLY: hak menutup kasir / keuangan             :', await roleCan('kasir'), '/', await roleCan('keuangan'), '(harus true / false)')
+console.log('KASIR-ONLY: superadmin menutup ditolak              :', await call(5, `select close_day('${cab1}', '${today}', 0, null)`))
+console.log('KASIR-ONLY: keuangan menutup ditolak                :', await call(3, `select close_day(null, '${today}', 0, null)`))
+await q(`delete from daily_closings where branch_id='${pusat}' and close_date='${today}'`)
+console.log('KASIR-ONLY: kasir tetap bisa menutup                :', await call(1, `select close_day(null, '${today}', ${cashPlus}, 'uji 020')`))
+console.log('GLOBAL: akun keuangan lama jadi tanpa cabang        :', (await q(`select branch_id from profiles where id='${U(3)}'`))[0].branch_id === null)
+console.log('GLOBAL: kasir tetap punya cabang                    :', (await q(`select branch_id from profiles where id='${U(1)}'`))[0].branch_id === pusat)
+console.log('GLOBAL: role lintas cabang boleh tanpa cabang       :', await call(5, `select set_user_role('${U(3)}','${keuanganRole}', null)`))
+console.log('GLOBAL: role kasir tanpa cabang ditolak             :', await call(5, `select set_user_role('${U(4)}','${kasirRole}', null)`))
+
 // status migrasi (dipakai juga untuk panduan pemilik)
 console.log('STATUS:', JSON.stringify(await q(`
  select '002' as migrasi, exists(select 1 from information_schema.columns where table_name='products' and column_name='author') as sudah
@@ -202,4 +218,5 @@ console.log('STATUS:', JSON.stringify(await q(`
  union all select '008', to_regprocedure('public.my_scope()') is not null
  union all select '017', exists(select 1 from information_schema.columns where table_name='sales' and column_name='request_id')
  union all select '018', to_regclass('public.daily_closings') is not null
- union all select '019', to_regprocedure('public.closing_status(date,date,uuid)') is not null`)))
+ union all select '019', to_regprocedure('public.closing_status(date,date,uuid)') is not null
+ union all select '020', to_regprocedure('public._is_kasir(uuid)') is not null`)))

@@ -64,7 +64,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile({ full_name: p.full_name, branch_id: p.branch_id, role_id: p.role_id, is_active: p.is_active,
         branch_name: x.branches?.name, role_name: scope?.role_name })
       setAllBranches(!!scope?.all_branches)
-      try { const saved = sessionStorage.getItem('active_branch'); if (saved && scope?.all_branches) setActiveBranch(saved) } catch { /* abaikan */ }
+      if (scope?.all_branches) {
+        // Cabang aktif: pilihan terakhir di komputer ini → cabang profil → cabang aktif pertama.
+        // Akun "Global" (branch_id kosong) butuh cadangan ini agar kasir/penjualan lintas cabang tetap jalan.
+        let pick: string | null = null
+        try { pick = sessionStorage.getItem('active_branch') } catch { /* abaikan */ }
+        if (!pick) pick = p.branch_id
+        if (!pick) {
+          const { data: bs } = await supabase.from('branches').select('id').eq('is_active', true).order('name').limit(1)
+          if (!alive) return
+          pick = (bs as { id: string }[] | null)?.[0]?.id ?? null
+        }
+        if (pick) { setActiveBranch(pick); try { sessionStorage.setItem('active_branch', pick) } catch { /* abaikan */ } }
+      }
       setPerms(rp ?? []); setLoading(false)
     })()
     return () => { alive = false }
