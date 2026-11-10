@@ -15,10 +15,10 @@ const json = (route, body) => route.fulfill({ status: 200, contentType: 'applica
 const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined, args: ['--no-sandbox'] })
 const jwt = () => { const b = (o) => Buffer.from(JSON.stringify(o)).toString('base64url'); return `${b({ alg: 'HS256', typ: 'JWT' })}.${b({ sub: 'u1', role: 'authenticated', exp: 4102444800 })}.sig` }
 let ok = 0, bad = 0; const t = (n, c, d = '') => { c ? ok++ : bad++; console.log(`${c ? 'PASS' : 'FAIL'}  ${n}${c ? '' : '  <-- ' + d}`) }
-async function open(w, h, { empty = false, allBranches = false } = {}) {
+async function open(w, h, { empty = false, allBranches = false, sale = null } = {}) {
   const ctx = await browser.newContext({ viewport: { width: w, height: h } })
   await ctx.addInitScript((s) => localStorage.setItem('sb-mock-auth-token', s), JSON.stringify({ access_token: jwt(), token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, refresh_token: 'r', user: { id: 'u1', aud: 'authenticated', role: 'authenticated', email: 'e@takom.id', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' } }))
-  const page = await ctx.newPage(); const calls = []; const errs = []
+  const page = await ctx.newPage(); const calls = []; const errs = []; const saleCalls = []
   page.on('pageerror', (e) => errs.push(e.message))
   await page.route('https://mock.supabase.co/**', async (route) => {
     const req = route.request(), url = req.url()
@@ -27,13 +27,14 @@ async function open(w, h, { empty = false, allBranches = false } = {}) {
     if (url.includes('/rest/v1/role_permissions')) return json(route, ['pos', 'products', 'stock', 'stock_move', 'sales_recap', 'finance', 'users', 'settings'].map((f) => ({ feature_key: f, can_create: f === 'pos', can_read: true, can_update: false, can_delete: false })))
     if (url.includes('/rpc/my_scope')) return json(route, [{ role_name: allBranches ? 'superadmin' : 'kasir', all_branches: allBranches }])
     if (url.includes('/rpc/stock_by_branch')) return json(route, B.map(([id, code, name, short]) => ({ branch_id: id, branch_code: code, branch_name: name, branch_short: short, is_pusat: code === 'PUSAT', qty: id === 'b3' ? 0 : 1000 })))
+    if (url.includes('/rpc/create_sale')) { saleCalls.push(JSON.parse(req.postData() || '{}')); const r = sale ? sale(saleCalls.length) : { ok: true }; return r.ok ? json(route, { sale_id: 's' + saleCalls.length, invoice_no: 'INV-' + saleCalls.length, subtotal: 20000, discount: 0, total: 20000, change: 0 }) : route.fulfill({ status: 503, contentType: 'application/json', headers: H, body: JSON.stringify({ message: 'koneksi terputus', code: 'XX000' }) }) }
     if (url.includes('/rpc/top_products')) { calls.push(JSON.parse(req.postData() || '{}')); return json(route, empty ? [] : top) }
     if (url.includes('/rest/v1/products')) return json(route, products)
     if (url.includes('/rest/v1/branches')) return json(route, B.map(([id, code, name, short]) => ({ id, code, name, short_name: short, is_pusat: code === 'PUSAT' })))
     return json(route, [])
   })
   await page.goto((process.env.BASE_URL || 'http://127.0.0.1:3100') + '/pos'); await page.waitForSelector('text=Suatu Hari Di Surga', { timeout: 15000 }); await page.waitForTimeout(700)
-  return { page, calls, errs, ctx }
+  return { page, calls, errs, ctx, saleCalls }
 }
 const wibToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date())
 const [ty, tm] = wibToday.split('-').map(Number)
@@ -121,4 +122,23 @@ await s.page.getByRole('button', { name: 'Semua menu' }).click()
 t('LAYAR PENDEK: burger tetap menampilkan semua 8 menu & Keluar tetap terlihat', (await s.page.locator('[role=menu] a').count()) === 8 && (await s.page.getByRole('button', { name: 'Keluar' }).isVisible()))
 await s.page.screenshot({ path: (process.env.SHOTS || 'tests/shots') + '/burger.png' }); await s.ctx.close()
 s = await open(1821, 963); await drag(s.page, -250); await s.page.screenshot({ path: (process.env.SHOTS || 'tests/shots') + '/ditarik.png' }); await s.ctx.close()
+
+// ---------- idempotensi bayar (kunci per percobaan) ----------
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+async function bayarQris(page) { await page.locator('tbody tr').first().click(); await page.keyboard.press('F8'); await page.getByRole('button', { name: /Lanjut ke metode bayar/ }).click(); await page.keyboard.press('2'); await page.waitForTimeout(700) }
+s = await open(1821, 963, { sale: (n) => ({ ok: n !== 1 }) })   // percobaan pertama gagal (koneksi putus), berikutnya berhasil
+await bayarQris(s.page)
+t('BAYAR GAGAL (koneksi putus): kunci idempotensi UUID v4 dikirim & pesan galat tampil', s.saleCalls.length === 1 && UUID.test(s.saleCalls[0].p_request_id) && (await s.page.getByText('koneksi terputus').count()) >= 1, JSON.stringify(s.saleCalls[0]))
+await s.page.keyboard.press('2'); await s.page.waitForTimeout(700)
+t('ULANGI bayar (keranjang & metode sama): memakai kunci YANG SAMA (server mengembalikan transaksi yang ada)', s.saleCalls.length === 2 && s.saleCalls[1].p_request_id === s.saleCalls[0].p_request_id, JSON.stringify(s.saleCalls.map((x) => x.p_request_id)))
+t('setelah berhasil: banner transaksi selesai tampil', (await s.page.getByText('INV-2').count()) >= 1)
+await s.page.keyboard.press('Escape'); await s.page.waitForTimeout(300)
+await bayarQris(s.page)
+t('TRANSAKSI BARU sesudah berhasil: kunci BARU (bukan kunci lama)', s.saleCalls.length === 3 && UUID.test(s.saleCalls[2].p_request_id) && s.saleCalls[2].p_request_id !== s.saleCalls[0].p_request_id, JSON.stringify(s.saleCalls.map((x) => x.p_request_id)))
+await s.ctx.close()
+s = await open(1821, 963, { sale: (n) => ({ ok: n >= 3 }) })   // dua kali gagal
+await bayarQris(s.page); await s.page.keyboard.press('2'); await s.page.waitForTimeout(500)
+await s.page.keyboard.press('Escape'); await s.page.waitForTimeout(200); await s.page.keyboard.press('Escape'); await s.page.waitForTimeout(300) // mundur ke daftar produk
+t('KERANJANG BERUBAH setelah gagal: kunci berganti (jangan membayar isi keranjang lain dengan kunci lama)', await (async () => { const before = s.saleCalls.at(-1).p_request_id; await s.page.locator('tbody tr').nth(1).click(); await s.page.keyboard.press('F8'); await s.page.getByRole('button', { name: /Lanjut ke metode bayar/ }).click(); await s.page.keyboard.press('2'); await s.page.waitForTimeout(600); return s.saleCalls.at(-1).p_request_id !== before })())
+await s.ctx.close()
 await browser.close(); console.log(`\nHASIL UI: ${ok} lulus, ${bad} gagal`); process.exit(bad ? 1 : 0)
