@@ -3,6 +3,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { Plus, Upload } from 'lucide-react'
 import { deleteMember, draftOf, listMembers, saveMember, type Member } from './api'
 import { MemberForm } from './MemberForm'
+import { ExtendMemberModal } from './ExtendMemberModal'
+import { ActiveCountdown } from './ActiveCountdown'
 import { ImportMembersModal } from './ImportMembersModal'
 import { useAuth } from '../auth/AuthProvider'
 import { useDebounced } from '../../shared/hooks'
@@ -15,8 +17,10 @@ export default function MembersPage() {
   const dq = useDebounced(q, 250)
   const [onlyActive, setOnlyActive] = useState(false)
   const [form, setForm] = useState<{ member: Member | null } | null>(null)
+  const [extend, setExtend] = useState<Member | null>(null)
   const [importing, setImporting] = useState(false)
   const [msg, setMsg] = useState('')
+  const showActions = can('members', 'u') || can('members', 'd')
 
   const { data = [], isFetching, isError } = useQuery({
     queryKey: ['members', dq, onlyActive], queryFn: () => listMembers(dq, onlyActive), placeholderData: keepPreviousData,
@@ -65,7 +69,8 @@ export default function MembersPage() {
               <th className="px-3 py-2 font-medium">Segment</th>
               <th className="px-3 py-2 text-right font-medium">Saldo</th>
               <th className="px-3 py-2 font-medium">Status</th>
-              <th className="px-3 py-2 text-right font-medium">Tindakan</th>
+              <th className="px-3 py-2 font-medium">Masa aktif</th>
+              {showActions && <th className="px-3 py-2 text-right font-medium">Tindakan</th>}
             </tr>
           </thead>
           <tbody>
@@ -85,15 +90,22 @@ export default function MembersPage() {
                     ? <span className="rounded-full bg-success/20 px-2 py-0.5 text-xs text-success">Aktif</span>
                     : <span className="rounded-full bg-warning/20 px-2 py-0.5 text-xs text-warning">Nonaktif</span>}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-right">
-                  {can('members', 'u') && <button className="btn-ghost !px-3 !py-1" onClick={() => setForm({ member: m })}>Ubah</button>}
-                  {can('members', 'u') && <button className="btn-ghost !px-3 !py-1" disabled={toggle.isPending} onClick={() => toggle.mutate(m)}>{m.is_active ? 'Nonaktifkan' : 'Aktifkan'}</button>}
-                  {can('members', 'd') && <button className="btn-ghost !px-3 !py-1 text-danger" onClick={() => void remove(m)}>Hapus</button>}
+                <td className="whitespace-nowrap px-3 py-2">
+                  <ActiveCountdown until={m.active_until} />
+                  {m.active_until && <div className="text-xs text-text-muted">s/d {m.active_until}</div>}
                 </td>
+                {showActions && (
+                  <td className="whitespace-nowrap px-3 py-2 text-right">
+                    {can('members', 'u') && <button className="btn-ghost !px-3 !py-1" onClick={() => setForm({ member: m })}>Ubah</button>}
+                    {can('members', 'u') && <button className="btn-ghost !px-3 !py-1" onClick={() => setExtend(m)}>Perpanjang</button>}
+                    {can('members', 'u') && <button className="btn-ghost !px-3 !py-1" disabled={toggle.isPending} onClick={() => toggle.mutate(m)}>{m.is_active ? 'Nonaktifkan' : 'Aktifkan'}</button>}
+                    {can('members', 'd') && <button className="btn-ghost !px-3 !py-1 text-danger" onClick={() => void remove(m)}>Hapus</button>}
+                  </td>
+                )}
               </tr>
             ))}
             {data.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-6 text-center text-text-muted">
+              <tr><td colSpan={showActions ? 10 : 9} className="px-4 py-6 text-center text-text-muted">
                 {isFetching ? 'Memuat…' : dq ? 'Tidak ada member yang cocok.' : 'Belum ada data member. Tambah satu per satu atau impor dari file CSV.'}
               </td></tr>
             )}
@@ -106,6 +118,7 @@ export default function MembersPage() {
       </p>
 
       {form && <MemberForm member={form.member} onClose={() => setForm(null)} onSaved={refresh} />}
+      {extend && <ExtendMemberModal member={extend} onClose={() => setExtend(null)} onSaved={refresh} />}
       {importing && <ImportMembersModal canOverwrite={can('members', 'u')} onClose={() => setImporting(false)} />}
     </div>
   )

@@ -252,6 +252,16 @@ console.log('MEMBER: member yang dipakai transaksi tak dihapus  :', await call(5
 console.log('MEMBER: member tanpa transaksi bisa dihapus       :', await call(5, `select member_delete((select id from members where member_no='M-101'))`), '| sisa:', (await q(`select count(*)::int n from members`))[0].n)
 console.log('MEMBER: impor tercatat di audit log               :', (await q(`select count(*)::int n from audit_log where action like 'member.%'`))[0].n >= 4)
 
+// ===== uji 022: masa aktif member =====
+await run('022', sql('supabase/manual_migrations/022_member_active_period.sql'))
+await run('022 ulang (idempoten)', sql('supabase/manual_migrations/022_member_active_period.sql'))
+console.log('MEMBER: set masa aktif (rentang)            :', await call(5, `select member_set_active_period((select id from members where member_no='M-100'),'2026-01-01','2026-12-31')`))
+console.log('MEMBER: masa aktif tersimpan                :', new Date((await q(`select active_from, active_until from members where member_no='M-100'`))[0].active_until).toISOString().slice(0, 10) === '2026-12-31')
+console.log('MEMBER: masa sampai sebelum mulai ditolak   :', await call(5, `select member_set_active_period((select id from members where member_no='M-100'),'2026-12-31','2026-01-01')`))
+console.log('MEMBER: kasir tidak bisa ubah masa aktif    :', await call(1, `select member_set_active_period((select id from members where member_no='M-100'),'2027-01-01','2027-12-31')`))
+console.log('MEMBER: member_save menyimpan masa aktif     :', await call(5, `select member_save(null,'M-106','Test Aktif',true,'{\"masa_mulai\":\"2026-06-01\",\"masa_sampai\":\"2027-05-31\"}'::jsonb)`))
+console.log('MEMBER: find_member mengembalikan active_until:', (await findm(1, 'M-106')).includes('2027-05-31'))
+
 // status migrasi (dipakai juga untuk panduan pemilik)
 console.log('STATUS:', JSON.stringify(await q(`
  select '002' as migrasi, exists(select 1 from information_schema.columns where table_name='products' and column_name='author') as sudah
@@ -265,4 +275,5 @@ console.log('STATUS:', JSON.stringify(await q(`
  union all select '018', to_regclass('public.daily_closings') is not null
  union all select '019', to_regprocedure('public.closing_status(date,date,uuid)') is not null
  union all select '020', to_regprocedure('public._is_kasir(uuid)') is not null
- union all select '021', to_regprocedure('public.member_save(uuid,text,text,boolean,jsonb)') is not null`)))
+ union all select '021', to_regprocedure('public.member_save(uuid,text,text,boolean,jsonb)') is not null
+ union all select '022', to_regprocedure('public.member_set_active_period(uuid,date,date)') is not null`)))

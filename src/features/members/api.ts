@@ -1,12 +1,13 @@
 import { supabase } from '../../lib/supabase'
 import { cleanSearch } from '../../shared/search'
 
-const COLS = 'id,member_no,name,is_active,institution,address,city,province,phone,mobile,segment,segment_detail,balance'
+const COLS = 'id,member_no,name,is_active,institution,address,city,province,phone,mobile,segment,segment_detail,balance,active_from,active_until'
 
 /** Data member yang dipakai di kasir (hasil RPC find_member). */
 export type MemberLookup = {
   id: string; member_no: string; name: string; is_active: boolean
   institution: string | null; city: string | null; segment: string | null; segment_detail: string | null; balance: number
+  active_from: string | null; active_until: string | null
 }
 /** Data member lengkap (halaman Membership), kolomnya mengikuti CSV pemilik. */
 export type Member = MemberLookup & {
@@ -16,6 +17,7 @@ export type MemberDraft = {
   id: string | null; member_no: string; name: string; is_active: boolean
   institution: string; address: string; city: string; province: string; phone: string
   mobile: string; segment: string; segment_detail: string; balance: string
+  active_from: string; active_until: string
 }
 export type MemberRowIn = {
   member_no: string; name: string; is_active: boolean
@@ -50,9 +52,10 @@ export async function findMember(q: string): Promise<MemberLookup[]> {
 }
 
 /** Kolom tambahan dikirim terpisah (p_data) supaya tanda tangan RPC tetap ringkas. */
-const dataOf = (m: Pick<MemberDraft, 'institution' | 'address' | 'city' | 'province' | 'phone' | 'mobile' | 'segment' | 'segment_detail' | 'balance'>) => ({
+const dataOf = (m: Pick<MemberDraft, 'institution' | 'address' | 'city' | 'province' | 'phone' | 'mobile' | 'segment' | 'segment_detail' | 'balance' | 'active_from' | 'active_until'>) => ({
   lembaga: m.institution, alamat: m.address, kota: m.city, propinsi: m.province,
   telp: m.phone, sellular: m.mobile, segment: m.segment, segment_detail: m.segment_detail, saldo: m.balance,
+  masa_mulai: m.active_from, masa_sampai: m.active_until,
 })
 
 export async function saveMember(m: MemberDraft): Promise<string> {
@@ -71,11 +74,21 @@ export function draftOf(m: Member): MemberDraft {
     province: m.province ?? '', phone: m.phone ?? '', mobile: m.mobile ?? '',
     segment: m.segment ?? '', segment_detail: m.segment_detail ?? '',
     balance: m.balance === null || m.balance === undefined ? '' : String(m.balance),
+    active_from: m.active_from ?? '', active_until: m.active_until ?? '',
   }
 }
 
 export async function deleteMember(id: string) {
   const { error } = await supabase.rpc('member_delete', { p_id: id })
+  if (error) throw new Error(msg(error.message))
+}
+
+/** Ubah / perpanjang masa aktif member. Tanggal format YYYY-MM-DD; null/kosong = tanpa batas. */
+export async function setActivePeriod(id: string, from: string | null, until: string | null) {
+  const { error } = await supabase.rpc('member_set_active_period', {
+    p_id: id, p_from: from && from.trim() ? from.trim() : null,
+    p_until: until && until.trim() ? until.trim() : null,
+  })
   if (error) throw new Error(msg(error.message))
 }
 

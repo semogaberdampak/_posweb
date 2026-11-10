@@ -7,6 +7,7 @@ export function MemberForm({ member, onClose, onSaved }: { member: Member | null
   const [d, setD] = useState<MemberDraft>(member ? draftOf(member) : {
     id: null, member_no: '', name: '', is_active: true, institution: '', address: '', city: '',
     province: '', phone: '', mobile: '', segment: '', segment_detail: '', balance: '',
+    active_from: '', active_until: '',
   })
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('')
   const set = (k: keyof MemberDraft) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -63,6 +64,31 @@ export function MemberForm({ member, onClose, onSaved }: { member: Member | null
           <input type="checkbox" checked={d.is_active} onChange={(e) => setD((p) => ({ ...p, is_active: e.target.checked }))} />
           Aktif (boleh dipakai di kasir)
         </label>
+        <div className="rounded-2xl border border-border-muted bg-bg-dark p-3">
+          <p className="mb-2 text-sm font-medium">Masa aktif (opsional)</p>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-sm">Mulai
+              <input type="date" className="input mt-1" value={d.active_from} onChange={set('active_from')} />
+            </label>
+            <label className="block text-sm">Sampai
+              <input type="date" className="input mt-1" value={d.active_until} onChange={set('active_until')} />
+            </label>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <button type="button" className="btn-ghost !px-3 !py-1" onClick={() => {
+              const base = d.active_from || new Date().toISOString().slice(0, 10)
+              const dt = new Date(base); dt.setFullYear(dt.getFullYear() + 1)
+              setD((p) => ({ ...p, active_from: base, active_until: dt.toISOString().slice(0, 10) }))
+            }}>+1 tahun</button>
+            <button type="button" className="btn-ghost !px-3 !py-1" onClick={() => {
+              const base = d.active_from || new Date().toISOString().slice(0, 10)
+              const dt = new Date(base); dt.setFullYear(dt.getFullYear() + 2)
+              setD((p) => ({ ...p, active_from: base, active_until: dt.toISOString().slice(0, 10) }))
+            }}>+2 tahun</button>
+            <button type="button" className="btn-ghost !px-3 !py-1" onClick={() => setD((p) => ({ ...p, active_from: '', active_until: '' }))}>Tanpa batas</button>
+          </div>
+          <p className="mt-2 text-xs text-text-muted">Kosongkan kedua tanggal untuk member tanpa batas waktu. Rentang tanggal bisa diisi manual.</p>
+        </div>
         {err && <p role="alert" className="text-sm text-danger">{err}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Batal</button>
