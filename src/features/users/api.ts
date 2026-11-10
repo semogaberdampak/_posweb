@@ -39,13 +39,35 @@ export const setUserRole = (user: string, role: string, branch: string) => rpc('
 export const setUserActive = (user: string, active: boolean) => rpc('set_user_active', { p_user: user, p_active: active })
 export const createRole = (name: string, desc: string, allBranches: boolean) => rpc('create_role', { p_name: name, p_desc: desc, p_all_branches: allBranches })
 
+/**
+ * Memanggil Edge Function dan menyusun pesan galat yang bisa ditindaklanjuti.
+ * - Ada balasan server (4xx/5xx): pakai pesan JSON dari fungsi + kode HTTP.
+ * - Tanpa balasan (CORS/jaringan/fungsi belum dipasang): jelaskan kemungkinan sebabnya.
+ */
 async function invokeFn(name: string, body: Record<string, unknown>, fallback: string) {
-  const { error } = await supabase.functions.invoke(name, { body })
-  if (error) {
-    let m = fallback
-    try { const j = await (error as { context?: Response }).context?.json(); if (j?.error) m = j.error } catch { /* pakai pesan umum */ }
-    throw new Error(m)
+  const { data, error } = await supabase.functions.invoke(name, { body })
+  if (!error) return data
+  console.error(`[${name}]`, error)
+  const res = (error as { context?: Response }).context
+  let detail = '', status: number | null = null
+  if (res && typeof res.text === 'function' && typeof res.status === 'number') {
+    status = res.status
+    try {
+      const txt = await res.text()
+      try {
+        const j = JSON.parse(txt) as { error?: string; message?: string; msg?: string }
+        detail = String(j.error ?? j.message ?? j.msg ?? '')
+      } catch { detail = txt.trim().slice(0, 200) }
+    } catch { /* abaikan, pakai pesan umum */ }
   }
+  if (status === 404) throw new Error(`Fungsi \`${name}\` belum dipasang di Supabase (HTTP 404).`)
+  if (status === null) {
+    throw new Error(
+      `${fallback} Server tidak menjawab sama sekali — biasanya karena secret ALLOWED_ORIGIN belum berisi alamat web ini ` +
+        '(CORS menolak) atau fungsinya belum di-deploy. Lihat detail di Console browser (F12).'
+    )
+  }
+  throw new Error(`${detail || fallback} (HTTP ${status})`)
 }
 
 /** Membuat akun login butuh kunci rahasia, jadi dikerjakan Edge Function `create-user` (lihat supabase/functions). */
