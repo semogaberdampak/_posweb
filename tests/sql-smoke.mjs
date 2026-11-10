@@ -175,6 +175,22 @@ console.log('TUTUP: baca tabel: kasir PUSAT / CAB1               :', (await as(1
 console.log('TUTUP: tulis langsung ke tabel ditolak              :', await call(1, `insert into daily_closings(branch_id, close_date, closed_by) values ('${pusat}', '2001-01-01', '${U(1)}')`))
 console.log('TUTUP: tercatat di audit log                        :', (await q(`select count(*)::int n from audit_log where action='daily.close'`))[0].n >= 1)
 
+// ===== uji 019: status tutup kasir per hari (halaman Rekap) =====
+await run('019', sql('supabase/manual_migrations/019_closing_status.sql'))
+await run('019 ulang (idempoten)', sql('supabase/manual_migrations/019_closing_status.sql'))
+const cstat = async (n, br) => { try { return (await as(n, `select closing_status('${today}', '${today}', ${br ? `'${br}'` : 'null'}) as r`))[0].r } catch (e) { return 'ERR: ' + e.message } }
+const cAll = await cstat(3, null)
+const cPusat = cAll.days.find((d) => d.branch_id === pusat), cCab1 = cAll.days.find((d) => d.branch_id === cab1)
+console.log('STATUS-TUTUP: keuangan lihat semua cabang           :', cAll.totals.days, 'hari |', cAll.totals.closed, 'tertutup |', cAll.totals.open, 'belum (harus 2/1/1)')
+console.log('STATUS-TUTUP: hari PUSAT tertutup + snapshot cocok   :', cPusat.closed, '|', cPusat.count, 'trx |', cPusat.net, '| penutup:', cPusat.closed_by_name)
+console.log('STATUS-TUTUP: hari CAB1 belum tertutup              :', cCab1.closed, '|', cCab1.count, 'trx (harus false)')
+console.log('STATUS-TUTUP: kasir hanya cabangnya                 :', (await cstat(1, null)).days.map((d) => d.branch_name).join(','), '(harus PUSAT saja)')
+console.log('STATUS-TUTUP: pengadaan ditolak                     :', (await cstat(2, null)))
+console.log('STATUS-TUTUP: kasir lihat cabang lain ditolak       :', (await cstat(1, cab1)))
+console.log('STATUS-TUTUP: rentang terbalik ditolak              :', await call(3, `select closing_status('${today}', '2001-01-01', null)`))
+const cSnap = (await q(`select coalesce(sum(total_count),0)::int c, coalesce(sum(net),0)::int n from daily_closings where branch_id = '${pusat}' and close_date = '${today}'`))[0]
+console.log('STATUS-TUTUP: angka = snapshot penutupan            :', cPusat.count === cSnap.c && Number(cPusat.net) === cSnap.n)
+
 // status migrasi (dipakai juga untuk panduan pemilik)
 console.log('STATUS:', JSON.stringify(await q(`
  select '002' as migrasi, exists(select 1 from information_schema.columns where table_name='products' and column_name='author') as sudah
@@ -185,4 +201,5 @@ console.log('STATUS:', JSON.stringify(await q(`
  union all select '007', to_regprocedure('public.revoke_user_sessions(uuid)') is not null
  union all select '008', to_regprocedure('public.my_scope()') is not null
  union all select '017', exists(select 1 from information_schema.columns where table_name='sales' and column_name='request_id')
- union all select '018', to_regclass('public.daily_closings') is not null`)))
+ union all select '018', to_regclass('public.daily_closings') is not null
+ union all select '019', to_regprocedure('public.closing_status(date,date,uuid)') is not null`)))

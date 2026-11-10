@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { rupiah } from '../../shared/format'
 import { useAuth } from '../auth/AuthProvider'
 import { listBranches } from '../users/api'
+import { fetchClosingStatus } from '../closing/api'
 import { fetchExport, fetchRecap, PAGE_SIZE } from './api'
 import { fmtTime, SaleDetailModal } from './SaleDetailModal'
 import { PeriodPicker } from '../../shared/PeriodPicker'
@@ -10,8 +11,12 @@ import { defaultPeriod, labelOf, rangeOf, tagOf, validate, type Period } from '.
 
 const METHOD: Record<string, string> = { cash: 'Tunai', qris: 'QRIS', debit: 'Debit', credit_card: 'Kartu Kredit' }
 
+/** Tanggal kalender WIB ('YYYY-MM-DD') dari waktu transaksi. */
+const wibDate = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
+const dayLabel = (d: string) => new Date(d + 'T00:00:00+07:00').toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short' })
+
 export default function SalesRecapPage() {
-  const { allBranches, activeBranchId, profile } = useAuth()
+  const { allBranches, activeBranchId, profile, can } = useAuth()
   const [period, setPeriod] = useState<Period>(() => defaultPeriod())
   const periodErr = validate(period)
   const rg = rangeOf(period)
@@ -29,6 +34,16 @@ export default function SalesRecapPage() {
     enabled: !periodErr, // periode tidak sah (mis. tanggal terbalik) tidak dikirim ke server
   })
   const data = periodErr ? undefined : rawData // periode tidak sah: jangan tampilkan angka periode lama
+
+  // Status tutup kasir: hanya untuk yang berhak (kasir, kabag, keuangan, superadmin).
+  const seeClosing = can('daily_close', 'r')
+  const { data: closing } = useQuery({
+    queryKey: ['closing-status', rg.from, rg.to, branchArg],
+    queryFn: () => fetchClosingStatus(rg.from, rg.to, branchArg),
+    enabled: seeClosing && !periodErr,
+  })
+  const closedKeys = new Set((closing?.days ?? []).filter((d) => d.closed).map((d) => `${d.branch_name}|${d.date}`))
+  const openDays = (closing?.days ?? []).filter((d) => !d.closed)
   const pages = Math.max(1, Math.ceil((data?.total_rows ?? 0) / PAGE_SIZE))
   useEffect(() => { if (data && page > pages) setPage(pages) }, [data, page, pages])
   const pick = (fn: () => void) => { fn(); setPage(1) } // ganti bulan/tahun/cabang = kembali ke halaman 1
@@ -81,10 +96,32 @@ export default function SalesRecapPage() {
         <p className="mb-3 text-sm text-text-muted">Per metode: {Object.entries(data.by_method).map(([m, t]) => `${METHOD[m] ?? m} ${rupiah(t ?? 0)}`).join(' · ')}</p>
       )}
 
+      {seeClosing && closing && closing.totals.days > 0 && (
+        openDays.length === 0 ? (
+          <p role="status" className="mb-4 rounded-2xl bg-bg-light p-4 text-sm text-success shadow">
+            Semua transaksi harian pada {labelOf(period)} sudah ditutup ({closing.totals.closed} hari).
+          </p>
+        ) : (
+          <div role="status" className="mb-4 rounded-2xl bg-bg-light p-4 text-sm shadow">
+            <p className="font-medium text-warning">
+              {openDays.length} dari {closing.totals.days} hari transaksi BELUM ditutup
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-2 text-xs">
+              {openDays.slice(0, 12).map((d) => (
+                <li key={`${d.branch_id}-${d.date}`} className="rounded-full bg-warning/20 px-2.5 py-1 text-warning">
+                  {dayLabel(d.date)}{showBranch ? ` · ${d.branch_name}` : ''} · {d.count} trx · {rupiah(d.net)}
+                </li>
+              ))}
+              {openDays.length > 12 && <li className="px-1 py-1 text-text-muted">+{openDays.length - 12} hari lainnya</li>}
+            </ul>
+          </div>
+        )
+      )}
+
       <div className={`overflow-auto rounded-2xl border border-border-muted ${isFetching ? 'opacity-70' : ''}`}>
         <table className="w-full text-sm">
           <thead className="bg-bg-dark text-left text-text-muted">
-            <tr><th className="p-2">No. nota</th><th className="p-2">Waktu</th>{showBranch && <th className="p-2">Cabang</th>}<th className="p-2">Kasir</th><th className="p-2">Metode</th><th className="p-2">Member</th><th className="p-2 text-right">Diskon</th><th className="p-2 text-right">Total</th><th className="p-2">Status</th></tr>
+            <tr><th className="p-2">No. nota</th><th className="p-2">Waktu</th>{showBranch && <th className="p-2">Cabang</th>}<th className="p-2">Kasir</th><th className="p-2">Metode</th><th className="p-2">Member</th><th className="p-2 text-right">Diskon</th><th className="p-2 text-right">Total</th><th className="p-2">Status</th>{seeClosing && <th className="p-2">Tutup kasir</th>}</tr>
           </thead>
           <tbody>
             {data?.rows.map((r) => (
@@ -95,10 +132,17 @@ export default function SalesRecapPage() {
                 <td className="p-2 text-right">{r.discount_amount ? rupiah(r.discount_amount) : '-'}</td>
                 <td className={`p-2 text-right font-medium ${r.status === 'void' ? 'text-danger line-through' : ''}`}>{rupiah(r.total)}</td>
                 <td className="p-2">{r.status === 'void' ? <span className="text-danger">Void</span> : <span className="text-success">Selesai</span>}</td>
+                {seeClosing && (
+                  <td className="p-2">
+                    {closedKeys.has(`${r.branch_name}|${wibDate(r.created_at)}`)
+                      ? <span className="text-success">Sudah ditutup</span>
+                      : <span className="text-warning">Belum ditutup</span>}
+                  </td>
+                )}
               </tr>
             ))}
-            {data && data.rows.length === 0 && <tr><td colSpan={9} className="p-8 text-center text-text-muted">Tidak ada transaksi pada {labelOf(period)}.</td></tr>}
-            {!data && !error && <tr><td colSpan={9} className="p-8 text-center text-text-muted">Memuat…</td></tr>}
+            {data && data.rows.length === 0 && <tr><td colSpan={seeClosing ? 10 : 9} className="p-8 text-center text-text-muted">Tidak ada transaksi pada {labelOf(period)}.</td></tr>}
+            {!data && !error && <tr><td colSpan={seeClosing ? 10 : 9} className="p-8 text-center text-text-muted">Memuat…</td></tr>}
           </tbody>
         </table>
       </div>

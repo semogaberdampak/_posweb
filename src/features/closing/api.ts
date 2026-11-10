@@ -18,6 +18,16 @@ export type DaySummary = {
   changed_after_close: boolean
 }
 
+export type DayClosingStatus = {
+  date: string; branch_id: string; branch_name: string
+  count: number; net: number; void_count: number
+  closed: boolean; closed_at: string | null; closed_by_name: string | null
+}
+export type ClosingStatus = {
+  from: string; to: string; days: DayClosingStatus[]
+  totals: { days: number; closed: number; open: number }
+}
+
 export type ClosingHistoryRow = {
   id: string; close_date: string; closed_at: string
   total_count: number; net: number; cash_expected: number
@@ -38,6 +48,13 @@ export async function closeDay(branchId: string, date: string, cashCounted: numb
   const { data, error } = await supabase.rpc('close_day', { p_branch: branchId, p_date: date, p_cash_counted: cashCounted, p_note: note.trim() || null })
   if (error) throw new Error(msg(error.message))
   return data as DaySummary
+}
+
+/** Status tutup kasir per hari pada satu rentang tanggal (WIB). branchId null = semua cabang yang boleh dilihat. */
+export async function fetchClosingStatus(from: string, to: string, branchId: string | null): Promise<ClosingStatus> {
+  const { data, error } = await supabase.rpc('closing_status', { p_from: from, p_to: to, p_branch: branchId })
+  if (error) throw new Error(msg(error.message))
+  return data as ClosingStatus
 }
 
 /** Riwayat penutupan cabang ini (dibatasi RLS: hak daily_close + akses cabang). */

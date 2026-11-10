@@ -21,6 +21,7 @@ const NAV: { to: string; label: string; feature: string; icon: LucideIcon; admin
 
 export default function Layout() {
   const { profile, can, allBranches, activeBranchId, setActiveBranchId } = useAuth()
+  const isKasir = profile?.role_name === 'kasir' // tombol Tutup Kasir di header khusus role kasir
   const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: listBranches, enabled: allBranches })
   const actingElsewhere = allBranches && !!activeBranchId && activeBranchId !== profile?.branch_id
   const { theme, toggle } = useTheme()
@@ -31,7 +32,8 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar items={NAV.filter((n) => can(n.feature, 'r') && (!n.adminOnly || profile?.role_name === 'superadmin')).map(({ to, label, icon }) => ({ to, label, icon }))}
+      <Sidebar items={NAV.filter((n) => can(n.feature, 'r') && (!n.adminOnly || profile?.role_name === 'superadmin')
+          && !(n.feature === 'daily_close' && isKasir)).map(({ to, label, icon }) => ({ to, label, icon }))}
         showTop={showTop} branchId={allBranches ? activeBranchId : null} branchLabel={topBranchLabel} />
 
       <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
@@ -46,6 +48,12 @@ export default function Layout() {
             {actingElsewhere && <span className="rounded-full bg-warning/20 px-2 py-0.5 text-warning">Bertindak sebagai cabang lain</span>}
           </div>
           <div className="flex items-center gap-3">
+            {isKasir && (
+              <NavLink to="/tutup-kasir" title="Tutup transaksi harian (tutup kasir)"
+                className="flex items-center gap-1.5 rounded-xl bg-bg-dark px-3 py-2.5 text-xs font-medium text-text-muted transition hover:bg-highlight/25">
+                <Lock className="h-4 w-4" /> Tutup Kasir
+              </NavLink>
+            )}
             <button onClick={toggle} title="Ganti mode gelap/terang"
               className="rounded-xl bg-bg-dark p-2.5 text-text-muted transition hover:bg-highlight/25">
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
