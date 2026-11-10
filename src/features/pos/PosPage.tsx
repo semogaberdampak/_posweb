@@ -7,6 +7,7 @@ import { printDirect } from '../../lib/webusb-printer'
 import { useInvoiceCfg, useReceiptCfg, type PrintData } from '../print/templates'
 import { listBranches } from '../users/api'
 import { StockByBranch } from '../stock/StockByBranch'
+import { findMember, type Member } from '../members/api'
 import { useAuth } from '../auth/AuthProvider'
 import { rupiah } from '../../shared/format'
 import { useDebounced } from '../../shared/hooks'
@@ -29,7 +30,11 @@ export default function PosPage() {
   const [cursor, setCursor] = useState(0)
   const [cart, setCart] = useState<CartLine[]>([])
   const [allDisc, setAllDisc] = useState<number | null>(null) // null = "diskon semua" mati
-  const [member, setMember] = useState('')
+  const [member, setMember] = useState('')            // teks yang diketik kasir
+  const [found, setFound] = useState<Member | null>(null) // member yang sudah dicek (wajib bila memakai diskon)
+  const [matches, setMatches] = useState<Member[] | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [memberMsg, setMemberMsg] = useState('')
   const [method, setMethod] = useState<Method | null>(null)
   const [cash, setCash] = useState('')
   const [busy, setBusy] = useState(false)
@@ -59,11 +64,14 @@ export default function PosPage() {
   const discAmt = cart.reduce((s, l) => s + lineDisc(l), 0)
   const total = subtotal - discAmt
   const anyDisc = cart.some((l) => eff(l) > 0)
-  const memberOk = !anyDisc || member.trim().length > 0
+  const memberOk = !anyDisc || !!found?.is_active
+  const memberNo = found?.member_no ?? ''
   const cashNum = Number(cash.replace(/\D/g, '')) || 0
 
   // ganti cabang aktif = mulai transaksi baru (cegah keranjang terbawa ke cabang lain)
-  useEffect(() => { setCart([]); setStep('items'); setAllDisc(null); setMember(''); setMethod(null); setCash('') }, [activeBranchId])
+  useEffect(() => {
+    setCart([]); setStep('items'); setAllDisc(null); setMember(''); setFound(null); setMatches(null); setMemberMsg(''); setMethod(null); setCash('')
+  }, [activeBranchId])
   // Saat mengetik, daftar sebelumnya langsung disaring di memori (server memakai pencarian kode/nama yang sama), jadi tidak menunggu jaringan.
   const products = useMemo(() => {
     const term = q.trim().toLowerCase()
@@ -112,21 +120,42 @@ export default function PosPage() {
     if (target) { add(target); if (exact) setQ('') }
   }
 
+  /** Cari member (tombol "Cek"): nomor ID persis atau nama. Bila hasilnya banyak, kasir memilih salah satu. */
+  async function checkMember() {
+    const term = member.trim()
+    setMemberMsg(''); setMatches(null)
+    if (!term) { setFound(null); setMemberMsg('Isi nomor ID atau nama member dulu.'); return }
+    setChecking(true)
+    try {
+      const rows = await findMember(term)
+      if (rows.length === 0) { setFound(null); setMemberMsg(`Member "${term}" tidak ditemukan.`); return }
+      const exact = rows.find((m) => m.member_no === term.toUpperCase())
+      if (exact || rows.length === 1) { selectMember(exact ?? rows[0]); return }
+      setMatches(rows); setMemberMsg(`${rows.length} member cocok — pilih salah satu di bawah.`)
+    } catch (e) { setFound(null); setMemberMsg(e instanceof Error ? e.message : 'Gagal mencari member.')
+    } finally { setChecking(false) }
+  }
+
+  function selectMember(m: Member) {
+    if (!m.is_active) { setFound(null); setMatches(null); setMemberMsg(`Member ${m.member_no} nonaktif — tidak bisa dipakai.`); return }
+    setFound(m); setMatches(null); setMember(m.member_no); setMemberMsg('')
+  }
+
   async function pay(m: Method) {
     if (busy || cart.length === 0) return
     setBusy(true); setError('')
     const lines = cart.map((l) => ({ ...l, disc: eff(l) }))
     // Kunci yang sama dipakai ulang bila percobaan sebelumnya gagal dengan keranjang/metode yang sama,
     // sehingga retry (koneksi putus) mengembalikan transaksi yang sudah ada, bukan membuat yang kedua.
-    const key = JSON.stringify([lines.map((l) => [l.id, l.qty, l.disc]), member.trim(), m, m === 'cash' ? cashNum : null, sellBranch ?? null])
+    const key = JSON.stringify([lines.map((l) => [l.id, l.qty, l.disc]), memberNo, m, m === 'cash' ? cashNum : null, sellBranch ?? null])
     if (attempt.current?.key !== key) attempt.current = { key, id: newRequestId() }
     try {
-      const sale = await createSale(lines, member, m, m === 'cash' ? cashNum : undefined, sellBranch, attempt.current.id)
+      const sale = await createSale(lines, memberNo, m, m === 'cash' ? cashNum : undefined, sellBranch, attempt.current.id)
       attempt.current = null
-      setDone({ sale, lines, method: m, cash: cashNum, member: member.trim(), at: new Date() })
+      setDone({ sale, lines, method: m, cash: cashNum, member: sale.member ?? '', at: new Date() })
       void qc.invalidateQueries({ queryKey: ['stock-branches'] })
       void qc.invalidateQueries({ queryKey: ['top-products'] })
-      setCart([]); setAllDisc(null); setMember(''); setMethod(null); setCash(''); setStep('items')
+      setCart([]); setAllDisc(null); setMember(''); setFound(null); setMatches(null); setMemberMsg(''); setMethod(null); setCash(''); setStep('items')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Transaksi gagal')
     } finally { setBusy(false) }
@@ -277,16 +306,43 @@ export default function PosPage() {
                 </select>
               )}
               {anyDisc && (
-                <input className="input" autoFocus placeholder="Member / nomer member" value={member} maxLength={40}
-                  onChange={(e) => setMember(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && memberOk) setStep('payment') }} />
+                <div className="space-y-2">
+                  <label className="block text-sm">Member <span className="text-text-muted">(wajib saat memakai diskon)</span>
+                    <div className="mt-1 flex gap-2">
+                      <input className="input" autoFocus placeholder="Nomor ID / Nama member" value={member} maxLength={60}
+                        onChange={(e) => { setMember(e.target.value); setFound(null); setMatches(null); setMemberMsg('') }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void checkMember() } }} />
+                      <button className="btn-ghost whitespace-nowrap" disabled={checking || !member.trim()} onClick={() => void checkMember()}>
+                        {checking ? 'Mencari\u2026' : 'Cek'}
+                      </button>
+                    </div>
+                  </label>
+                  {found && <p className="rounded-2xl bg-success/20 px-3 py-2 text-sm text-success">
+                    Nomor ID: <b>{found.member_no}</b> \u2014 Nama: <b>{found.name}</b>
+                  </p>}
+                  {matches && (
+                    <ul className="max-h-40 space-y-1 overflow-auto">
+                      {matches.map((m) => (
+                        <li key={m.id}>
+                          <button className="w-full rounded-xl bg-bg-dark px-3 py-1.5 text-left text-sm hover:bg-highlight/25"
+                            onClick={() => selectMember(m)}>
+                            <b>{m.member_no}</b> \u2014 {m.name}{!m.is_active && ' (nonaktif)'}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {memberMsg && <p className={`text-sm ${found ? 'text-text-muted' : 'text-danger'}`}>{memberMsg}</p>}
+                </div>
               )}
               <button className="btn-primary w-full" disabled={!memberOk} onClick={() => setStep('payment')}>Lanjut ke metode bayar (F8)</button>
+              {anyDisc && !found && <p className="text-center text-xs text-text-muted">Cari member dulu, lalu tekan Cek. Diskon hanya berlaku untuk member terdaftar.</p>}
             </div>
           )}
 
           {step === 'payment' && (
             <div className="space-y-3">
+              {found && <p className="rounded-2xl bg-bg-dark px-3 py-2 text-sm">Member: <b>{found.member_no}</b> \u2014 {found.name}</p>}
               <div className="grid grid-cols-2 gap-2">
                 {METHODS.map((m, i) => (
                   <button key={m.key} disabled={busy} className={method === m.key ? 'btn-primary' : 'btn-ghost'} onClick={() => choose(m.key)}>

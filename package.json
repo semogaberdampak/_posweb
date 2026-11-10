@@ -12,6 +12,7 @@
     "import:stock": "node scripts/import-stock.mjs",
     "test:e2e": "node tests/e2e-flow.mjs",
     "test:csv": "node tests/stock-csv.mjs",
+    "test:member": "node tests/member-csv.mjs",
     "test:print": "node tests/print-render.mjs",
     "backup": "node scripts/backup.mjs",
     "backup:verify": "node scripts/backup.mjs --verify",

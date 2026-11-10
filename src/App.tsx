@@ -7,6 +7,7 @@ import ProductsPage from './features/products/ProductsPage'
 import UsersPage from './features/users/UsersPage'
 import StockPage from './features/stock/StockPage'
 import StockMovePage from './features/stock/StockMovePage'
+import MembersPage from './features/members/MembersPage'
 import SettingsPage from './features/settings/SettingsPage'
 import SalesRecapPage from './features/sales/SalesRecapPage'
 import DailyClosePage from './features/closing/DailyClosePage'
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/pos" element={<RequirePerm feature="pos"><PosPage /></RequirePerm>} />
           <Route path="/produk" element={<RequirePerm feature="products"><ProductsPage /></RequirePerm>} />
           <Route path="/mutasi-stok" element={<RequirePerm feature="stock_move"><StockMovePage /></RequirePerm>} />
+          <Route path="/membership" element={<RequirePerm feature="members"><MembersPage /></RequirePerm>} />
           <Route path="/stok" element={<RequirePerm feature="stock"><StockPage /></RequirePerm>} />
           <Route path="/laporan" element={<RequirePerm feature="sales_recap"><SalesRecapPage /></RequirePerm>} />
           <Route path="/tutup-kasir" element={<RequireKasir><DailyClosePage /></RequireKasir>} />

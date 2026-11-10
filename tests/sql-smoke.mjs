@@ -207,6 +207,40 @@ console.log('GLOBAL: kasir tetap punya cabang                    :', (await q(`s
 console.log('GLOBAL: role lintas cabang boleh tanpa cabang       :', await call(5, `select set_user_role('${U(3)}','${keuanganRole}', null)`))
 console.log('GLOBAL: role kasir tanpa cabang ditolak             :', await call(5, `select set_user_role('${U(4)}','${kasirRole}', null)`))
 
+// ===== uji 021: membership =====
+await run('021', sql('supabase/manual_migrations/021_membership.sql'))
+await run('021 ulang (idempoten)', sql('supabase/manual_migrations/021_membership.sql'))
+const agen = (await q(`select r.id, r.all_branches from roles r where r.name = 'Agen Member'`))[0]
+const agenPerm = (await q(`select feature_key, can_create, can_read, can_update, can_delete from role_permissions where role_id='${agen?.id}'`))
+console.log('MEMBER: role Agen Member ada & Global             :', !!agen && agen.all_branches === true)
+console.log('MEMBER: Agen Member CRUD members, fitur lain baca  :',
+  JSON.stringify(agenPerm.find((p) => p.feature_key === 'members')) === '{"feature_key":"members","can_create":true,"can_read":true,"can_update":true,"can_delete":true}' &&
+  agenPerm.filter((p) => p.feature_key !== 'members').every((p) => p.can_read && !p.can_create && !p.can_update && !p.can_delete) &&
+  agenPerm.length === (await q(`select count(*)::int n from features`))[0].n)
+const findm = async (n, s) => { try { return JSON.stringify(await as(n, `select * from find_member(${s === null ? 'null' : `'${s}'`})`)) } catch (e) { return 'ERR: ' + e.message } }
+console.log('MEMBER: superadmin tambah member                  :', await call(5, `select member_save(null,'M-100','Budi Santoso',true)`))
+console.log('MEMBER: nomor ganda (beda kapital) ditolak        :', await call(5, `select member_save(null,'m-100','Orang Lain',true)`))
+console.log('MEMBER: nomor tidak valid ditolak                 :', await call(5, `select member_save(null,'M 100!','X',true)`))
+console.log('MEMBER: nama kosong ditolak                       :', await call(5, `select member_save(null,'M-101','   ',true)`))
+console.log('MEMBER: kasir mencari lewat nomor / nama          :', (await findm(1, 'M-100')).includes('Budi Santoso'), '/', (await findm(1, 'budi')).includes('M-100'))
+console.log('MEMBER: pencarian kosong tidak mengembalikan apa pun:', await findm(1, '   '), '(harus [])')
+console.log('MEMBER: pengadaan (tanpa hak member/pos) ditolak  :', await findm(2, 'budi'))
+console.log('MEMBER: kasir tidak bisa menulis langsung ke tabel:', await call(1, `insert into members(member_no,name) values ('M-999','Kasir')`))
+console.log('MEMBER: kasir tidak bisa mengubah/menghapus member:', await call(1, `select member_save((select id from members where member_no='M-100'),'M-100','Diubah Kasir',true)`), '/', await call(1, `select member_delete((select id from members where member_no='M-100'))`))
+const impM = async (obj, ow) => { try { return JSON.stringify((await as(5, `select import_members('${JSON.stringify(obj).replace(/'/g, "''")}'::jsonb, ${ow}) as r`))[0].r) } catch (e) { return 'ERR: ' + e.message } }
+console.log('MEMBER: impor 3 baris (1 ganda, 1 rusak)          :', await impM([{ member_no: 'M-101', name: 'Siti', is_active: true }, { member_no: 'M-100', name: 'Nama Lain', is_active: true }, { member_no: '', name: 'Tanpa Nomor' }], false))
+console.log('MEMBER: impor dengan timpa memperbarui nama       :', await impM([{ member_no: 'm-100', name: 'Budi Baru', is_active: true }], true), '| baris sekarang:', (await q(`select name from members where member_no='M-100'`))[0].name)
+const disc = (mem) => (mem === null
+  ? sale(1, [{ product_id: A, qty: 1, discount_pct: 5 }], null, 'qris')
+  : sale(1, [{ product_id: A, qty: 1, discount_pct: 5 }], mem, 'qris'))
+console.log('MEMBER: diskon tanpa member ditolak               :', (await disc(null)).includes('member wajib'))
+console.log('MEMBER: diskon dengan member tak terdaftar ditolak:', (await disc('M-404')).includes('tidak terdaftar'))
+console.log('MEMBER: diskon dengan member aktif diterima       :', !!(await disc('M-100'))[0]?.r?.invoice_no)
+console.log('MEMBER: nama member tercatat di transaksi         :', (await q(`select member_label from sales where discount_amount > 0 order by created_at desc limit 1`))[0].member_label)
+console.log('MEMBER: member yang dipakai transaksi tak dihapus  :', await call(5, `select member_delete((select id from members where member_no='M-100'))`))
+console.log('MEMBER: member tanpa transaksi bisa dihapus       :', await call(5, `select member_delete((select id from members where member_no='M-101'))`), '| sisa:', (await q(`select count(*)::int n from members`))[0].n)
+console.log('MEMBER: impor tercatat di audit log               :', (await q(`select count(*)::int n from audit_log where action like 'member.%'`))[0].n >= 4)
+
 // status migrasi (dipakai juga untuk panduan pemilik)
 console.log('STATUS:', JSON.stringify(await q(`
  select '002' as migrasi, exists(select 1 from information_schema.columns where table_name='products' and column_name='author') as sudah
@@ -219,4 +253,5 @@ console.log('STATUS:', JSON.stringify(await q(`
  union all select '017', exists(select 1 from information_schema.columns where table_name='sales' and column_name='request_id')
  union all select '018', to_regclass('public.daily_closings') is not null
  union all select '019', to_regprocedure('public.closing_status(date,date,uuid)') is not null
- union all select '020', to_regprocedure('public._is_kasir(uuid)') is not null`)))
+ union all select '020', to_regprocedure('public._is_kasir(uuid)') is not null
+ union all select '021', to_regprocedure('public.member_save(uuid,text,text,boolean)') is not null`)))

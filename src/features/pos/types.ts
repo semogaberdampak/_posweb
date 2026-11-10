@@ -4,4 +4,6 @@ export type Method = 'cash' | 'qris' | 'debit' | 'credit_card'
 export type SaleResult = {
   sale_id: string; invoice_no: string; subtotal: number
   discount: number; total: number; change: number
+  /** "NOMOR - Nama" member yang tersimpan di server (null bila tanpa member) */
+  member?: string | null
 }

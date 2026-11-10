@@ -46,15 +46,19 @@ const users = [ // [n, email, nama, cabang, role]
   [105, 'kasir.santamaria', 'Kasir Santa Maria', 'SANTAMARIA', 'kasir'], [106, 'kasir.athanasius', 'Kasir Athanasius', 'ATHANASIUS', 'kasir'],
   [107, 'kasir.antonius', 'Kasir Antonius', 'ANTONIUS', 'kasir'], [201, 'pengadaan.pusat', 'Pengadaan', 'PUSAT', 'pengadaan'],
   [202, 'keuangan.pusat', 'Keuangan', 'PUSAT', 'keuangan'], [203, 'kabag.pusat', 'Kabag', 'PUSAT', 'kabag'], [204, 'superadmin', 'Super Admin', 'PUSAT', 'superadmin'],
+  [205, 'agen.member', 'Agen Member', 'PUSAT', 'Agen Member'],
 ]
 for (const [n, em, nama, cab, role] of users) await db.exec(`insert into auth.users values ('${uid(n)}','${em}@takom.id');
   insert into profiles(id,full_name,branch_id,role_id) select '${uid(n)}','${nama}','${B[cab]}',(select id from roles where name='${role}');`)
 const KR = { KRANGGAN: uid(101), KATEDRAL1: uid(102), KATEDRAL2: uid(103), PAULUS: uid(104), SANTAMARIA: uid(105), ATHANASIUS: uid(106), ANTONIUS: uid(107) }
-const PENG = uid(201), KEU = uid(202), KABAG = uid(203), SA = uid(204)
+const PENG = uid(201), KEU = uid(202), KABAG = uid(203), SA = uid(204), AGEN = uid(205)
 
 let products = process.argv[2] ? JSON.parse(fs.readFileSync(process.argv[2], 'utf8')) : Array.from({ length: 60 }, (_, i) => ({ code: i % 9 === 0 ? `1115AX${String(i).padStart(4, '0')}` : `10000${11000 + i}`, name: `Buku contoh ${i}`, price: 5000 + (i % 13) * 3500, author: i % 2 ? 'Penulis X' : null }))
 for (const p of products) await db.exec(`insert into products(code,name,price,author) values (${sq(p.code)}, ${sq(p.name)}, ${p.price}, ${p.author ? sq(p.author) : 'null'})`)
 await db.exec(`insert into products(code,name,price,is_active) values ('NONAKTIF1','Produk nonaktif',10000,false)`)
+// member untuk diskon (migrasi 021: diskon wajib member terdaftar & aktif)
+await db.exec(`insert into members(member_no,name) values ('M-001','Member Satu'),('M-002','Member Dua'),('M-003','Member Tiga');
+  insert into members(member_no,name,is_active) values ('M-NONAKTIF','Member Nonaktif',false);`)
 const P = Object.fromEntries((await q('select code,id,price from products')).map((r) => [r.code, r]))
 const codes = products.map((p) => p.code)
 console.log(`Data uji: ${products.length} produk, 7 cabang, ${users.length} akun\n`)
@@ -95,7 +99,10 @@ s = await sell(KR.ATHANASIUS, [{ code: c0, qty: 1 }, { code: c1, qty: 2, d: 15 }
 check('KARTU KREDIT berhasil', !!s.invoice_no)
 
 check('diskon tanpa member ditolak', /member wajib/.test(await err(KR.KRANGGAN, `select create_sale(${lit([{ product_id: P[c0].id, qty: 1, discount_pct: 5 }])}, '', 'qris', null, null)`) ?? ''))
-check('diskon 12% (tidak ada di daftar) ditolak', /diskon tidak valid/.test(await err(KR.KRANGGAN, `select create_sale(${lit([{ product_id: P[c0].id, qty: 1, discount_pct: 12 }])}, 'M', 'qris', null, null)`) ?? ''))
+check('diskon 12% (tidak ada di daftar) ditolak', /diskon tidak valid/.test(await err(KR.KRANGGAN, `select create_sale(${lit([{ product_id: P[c0].id, qty: 1, discount_pct: 12 }])}, 'M-001', 'qris', null, null)`) ?? ''))
+check('diskon dengan member tidak terdaftar ditolak', /tidak terdaftar/.test(await err(KR.KRANGGAN, `select create_sale(${lit([{ product_id: P[c0].id, qty: 1, discount_pct: 5 }])}, 'M-999', 'qris', null, null)`) ?? ''))
+check('diskon dengan member nonaktif ditolak', /tidak terdaftar|nonaktif/.test(await err(KR.KRANGGAN, `select create_sale(${lit([{ product_id: P[c0].id, qty: 1, discount_pct: 5 }])}, 'M-NONAKTIF', 'qris', null, null)`) ?? ''))
+check('nama member tersimpan di transaksi (NOMOR - Nama)', (await q(`select member_label from sales where payment_method = 'qris' and discount_amount > 0 order by created_at limit 1`))[0]?.member_label === 'M-001 - Member Satu')
 check('tunai kurang ditolak', /uang diterima kurang/.test(await err(KR.KRANGGAN, `select create_sale(${lit([{ product_id: P[c0].id, qty: 1, discount_pct: 0 }])}, null, 'cash', 1, null)`) ?? ''))
 check('stok kurang ditolak (qty melebihi stok)', /stok tidak cukup/.test(await err(KR.KRANGGAN, `select create_sale(${lit([{ product_id: P[c0].id, qty: 9999, discount_pct: 0 }])}, null, 'qris', null, null)`) ?? ''))
 check('produk nonaktif tidak bisa dijual', /tidak ditemukan|nonaktif/.test(await err(KR.KRANGGAN, `select create_sale(${lit([{ product_id: P.NONAKTIF1.id, qty: 1, discount_pct: 0 }])}, null, 'qris', null, null)`) ?? ''))
@@ -268,6 +275,27 @@ check('TUTUP: keuangan hanya boleh melihat, pengadaan ditolak',
   /hanya kasir/.test(await err(KEU, `select close_day(null,'${hariIni}',0,null)`) ?? '') &&
   (await tutupSum(KEU, null)).totals.count >= 0 && /forbidden/.test(await err(PENG, `select daily_close_summary(null,'${hariIni}')`) ?? ''))
 check('TUTUP: tulis langsung ke tabel ditolak', !!(await err(KR.KRANGGAN, `insert into daily_closings(branch_id, close_date, closed_by) values ('${B.KRANGGAN}','2000-01-01','${KR.KRANGGAN}')`)))
+
+// ---------- membership (migrasi 021) ----------
+const findM = async (user, q) => (await as(user, `select * from find_member(${sq(q)})`))
+check('MEMBER: kasir bisa mencari member (nomor & nama)', (await findM(KR.KRANGGAN, 'M-001')).length === 1 && (await findM(KR.KRANGGAN, 'dua')).length === 1)
+check('MEMBER: pencarian kosong tidak mengembalikan semua', (await findM(KR.KRANGGAN, '  ')).length === 0)
+check('MEMBER: kasir TIDAK boleh menambah/menghapus member',
+  /forbidden/.test(await err(KR.KRANGGAN, `select member_save(null,'M-010','Dari Kasir',true)`) ?? '') &&
+  /forbidden/.test(await err(KR.KRANGGAN, `select member_delete((select id from members where member_no='M-001'))`) ?? ''))
+check('MEMBER: agen member (Global) boleh menambah member',
+  (await as(AGEN, `select member_save(null,'M-010','Dari Agen',true) as id`))[0]?.id !== null)
+check('MEMBER: nomor ganda (beda huruf besar/kecil) ditolak', /sudah dipakai/.test(await err(AGEN, `select member_save(null,'m-010','Ganda',true)`) ?? ''))
+check('MEMBER: impor CSV (tanpa timpa) melewati nomor yang sudah ada',
+  (await as(AGEN, `select import_members(${lit([{ member_no: 'M-011', name: 'Impor Baru', is_active: true }, { member_no: 'M-001', name: 'Nama Lain', is_active: true }])}, false) as r`))[0].r.inserted === 1)
+check('MEMBER: impor dengan timpa memperbarui nama',
+  (await as(AGEN, `select import_members(${lit([{ member_no: 'M-001', name: 'Member Satu Baru', is_active: true }])}, true) as r`))[0].r.updated === 1)
+check('MEMBER: member yang dipakai transaksi tidak bisa dihapus (disarankan nonaktifkan)',
+  /nonaktifkan/.test(await err(AGEN, `select member_delete((select id from members where member_no='M-001'))`) ?? ''))
+check('MEMBER: agen member hanya bisa DIBACA pada fitur lain',
+  (await as(AGEN, `select has_perm('products','u') as u, has_perm('products','r') as r, has_perm('pos','c') as p`))[0].u === false &&
+  (await as(AGEN, `select has_perm('products','r') as r`))[0].r === true &&
+  (await as(AGEN, `select has_perm('pos','c') as p`))[0].p === false)
 
 // ---------- keutuhan ----------
 console.log('')
