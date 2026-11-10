@@ -4,39 +4,39 @@
 /* ===== Palet (hue 63 = amber hangat). Mode gelap = palet dari pemilik; mode terang = turunan (terang-gelap dibalik, hue & chroma tetap) ===== */
 :root {
   color-scheme: light;
-  --bg-dark: oklch(0.92 0.025 63);        /* area "tenggelam": header tabel, kolom input */
-  --bg: oklch(0.96 0.025 63);             /* latar halaman */
-  --bg-light: oklch(0.99 0.02 63);        /* panel / kartu (menonjol) */
-  --text: oklch(0.15 0.05 63);
-  --text-muted: oklch(0.4 0.05 63);
-  --highlight: oklch(0.8 0.07 63);        /* hover / sorotan */
-  --border: oklch(0.65 0.05 63);
-  --border-muted: oklch(0.85 0.05 63);
-  --primary: oklch(0.48 0.1 63);
-  --on-primary: oklch(0.99 0.02 63);      /* teks di atas warna primary (tambahan) */
-  --secondary: oklch(0.48 0.1 243);
-  --danger: oklch(0.5 0.05 30);
-  --warning: oklch(0.5 0.05 100);
-  --success: oklch(0.5 0.05 160);
-  --info: oklch(0.5 0.05 260);
+  --bg-dark: oklch(0.93 0.012 40);        /* area "tenggelam": header tabel, kolom input */
+  --bg: oklch(0.965 0.012 40);            /* latar halaman */
+  --bg-light: oklch(0.99 0.008 40);       /* panel / kartu (menonjol) */
+  --text: oklch(0.20 0.025 40);
+  --text-muted: oklch(0.42 0.02 40);
+  --highlight: oklch(0.88 0.025 40);      /* hover / sorotan */
+  --border: oklch(0.70 0.015 40);
+  --border-muted: oklch(0.86 0.01 40);
+  --primary: oklch(0.48 0.10 35);
+  --on-primary: oklch(0.99 0.008 40);     /* teks di atas warna primary (tambahan) */
+  --secondary: oklch(0.46 0.06 210);
+  --danger: oklch(0.52 0.10 25);
+  --warning: oklch(0.55 0.09 85);
+  --success: oklch(0.50 0.08 150);
+  --info: oklch(0.52 0.07 250);
 }
 .dark {
   color-scheme: dark;
-  --bg-dark: oklch(0.1 0.025 63);
-  --bg: oklch(0.15 0.025 63);
-  --bg-light: oklch(0.2 0.025 63);
-  --text: oklch(0.96 0.05 63);
-  --text-muted: oklch(0.76 0.05 63);
-  --highlight: oklch(0.5 0.05 63);
-  --border: oklch(0.4 0.05 63);
-  --border-muted: oklch(0.3 0.05 63);
-  --primary: oklch(0.76 0.1 63);
-  --on-primary: oklch(0.15 0.025 63);
-  --secondary: oklch(0.76 0.1 243);
-  --danger: oklch(0.7 0.05 30);
-  --warning: oklch(0.7 0.05 100);
-  --success: oklch(0.7 0.05 160);
-  --info: oklch(0.7 0.05 260);
+  --bg-dark: oklch(0.12 0.012 40);
+  --bg: oklch(0.16 0.012 40);
+  --bg-light: oklch(0.21 0.012 40);
+  --text: oklch(0.92 0.02 40);
+  --text-muted: oklch(0.72 0.02 40);
+  --highlight: oklch(0.30 0.025 40);
+  --border: oklch(0.34 0.015 40);
+  --border-muted: oklch(0.26 0.01 40);
+  --primary: oklch(0.74 0.10 35);
+  --on-primary: oklch(0.16 0.012 40);
+  --secondary: oklch(0.74 0.06 210);
+  --danger: oklch(0.72 0.10 25);
+  --warning: oklch(0.76 0.09 85);
+  --success: oklch(0.74 0.08 150);
+  --info: oklch(0.76 0.07 250);
 }
 
 @theme inline {
