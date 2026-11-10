@@ -7,7 +7,7 @@ import { printDirect } from '../../lib/webusb-printer'
 import { useInvoiceCfg, useReceiptCfg, type PrintData } from '../print/templates'
 import { listBranches } from '../users/api'
 import { StockByBranch } from '../stock/StockByBranch'
-import { findMember, type Member } from '../members/api'
+import { findMember, type MemberLookup } from '../members/api'
 import { useAuth } from '../auth/AuthProvider'
 import { rupiah } from '../../shared/format'
 import { useDebounced } from '../../shared/hooks'
@@ -31,8 +31,8 @@ export default function PosPage() {
   const [cart, setCart] = useState<CartLine[]>([])
   const [allDisc, setAllDisc] = useState<number | null>(null) // null = "diskon semua" mati
   const [member, setMember] = useState('')            // teks yang diketik kasir
-  const [found, setFound] = useState<Member | null>(null) // member yang sudah dicek (wajib bila memakai diskon)
-  const [matches, setMatches] = useState<Member[] | null>(null)
+  const [found, setFound] = useState<MemberLookup | null>(null) // member yang sudah dicek (wajib bila memakai diskon)
+  const [matches, setMatches] = useState<MemberLookup[] | null>(null)
   const [checking, setChecking] = useState(false)
   const [memberMsg, setMemberMsg] = useState('')
   const [method, setMethod] = useState<Method | null>(null)
@@ -136,7 +136,7 @@ export default function PosPage() {
     } finally { setChecking(false) }
   }
 
-  function selectMember(m: Member) {
+  function selectMember(m: MemberLookup) {
     if (!m.is_active) { setFound(null); setMatches(null); setMemberMsg(`Member ${m.member_no} nonaktif — tidak bisa dipakai.`); return }
     setFound(m); setMatches(null); setMember(m.member_no); setMemberMsg('')
   }
@@ -317,16 +317,21 @@ export default function PosPage() {
                       </button>
                     </div>
                   </label>
-                  {found && <p className="rounded-2xl bg-success/20 px-3 py-2 text-sm text-success">
+                  {found && <div className="rounded-2xl bg-success/20 px-3 py-2 text-sm text-success">
                     Nomor ID: <b>{found.member_no}</b> \u2014 Nama: <b>{found.name}</b>
-                  </p>}
+                    {(found.institution || found.city || found.segment_detail) && (
+                      <div className="text-xs text-success/80">
+                        {[found.institution, found.city, found.segment, found.segment_detail].filter(Boolean).join(' · ')}
+                      </div>
+                    )}
+                  </div>}
                   {matches && (
                     <ul className="max-h-40 space-y-1 overflow-auto">
                       {matches.map((m) => (
                         <li key={m.id}>
                           <button className="w-full rounded-xl bg-bg-dark px-3 py-1.5 text-left text-sm hover:bg-highlight/25"
                             onClick={() => selectMember(m)}>
-                            <b>{m.member_no}</b> \u2014 {m.name}{!m.is_active && ' (nonaktif)'}
+                            <b>{m.member_no}</b> \u2014 {m.name}{m.city ? ` · ${m.city}` : ''}{!m.is_active && ' (nonaktif)'}
                           </button>
                         </li>
                       ))}

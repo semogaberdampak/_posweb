@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Upload } from 'lucide-react'
-import { deleteMember, listMembers, saveMember, type Member } from './api'
+import { deleteMember, draftOf, listMembers, saveMember, type Member } from './api'
 import { MemberForm } from './MemberForm'
 import { ImportMembersModal } from './ImportMembersModal'
 import { useAuth } from '../auth/AuthProvider'
 import { useDebounced } from '../../shared/hooks'
+import { rupiah } from '../../shared/format'
 
 export default function MembersPage() {
   const { can } = useAuth()
@@ -24,7 +25,7 @@ export default function MembersPage() {
   const refresh = () => void qc.invalidateQueries({ queryKey: ['members'] })
 
   const toggle = useMutation({
-    mutationFn: (m: Member) => saveMember({ id: m.id, member_no: m.member_no, name: m.name, is_active: !m.is_active }),
+    mutationFn: (m: Member) => saveMember({ ...draftOf(m), is_active: !m.is_active }),
     onSuccess: () => { setMsg(''); refresh() },
     onError: (e) => setMsg(e instanceof Error ? e.message : 'Gagal mengubah status.'),
   })
@@ -39,7 +40,7 @@ export default function MembersPage() {
     <div className="flex h-full flex-col gap-3 p-4">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="mr-2 text-xl font-semibold">Membership</h1>
-        <input className="input !w-64" placeholder="Cari nomor ID / nama member" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input !w-64" placeholder="Cari nomor ID / nama / kota" value={q} onChange={(e) => setQ(e.target.value)} />
         <label className="flex items-center gap-2 text-sm text-text-muted">
           <input type="checkbox" checked={onlyActive} onChange={(e) => setOnlyActive(e.target.checked)} /> hanya aktif
         </label>
@@ -56,23 +57,35 @@ export default function MembersPage() {
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-bg-dark text-left text-text-muted">
             <tr>
-              <th className="px-4 py-2 font-medium">Nomor ID</th>
-              <th className="px-4 py-2 font-medium">Nama member</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2 text-right font-medium">Tindakan</th>
+              <th className="px-3 py-2 font-medium">Cust ID</th>
+              <th className="px-3 py-2 font-medium">Nama</th>
+              <th className="px-3 py-2 font-medium">Lembaga</th>
+              <th className="px-3 py-2 font-medium">Kota</th>
+              <th className="px-3 py-2 font-medium">Telp. / Sellular</th>
+              <th className="px-3 py-2 font-medium">Segment</th>
+              <th className="px-3 py-2 text-right font-medium">Saldo</th>
+              <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 text-right font-medium">Tindakan</th>
             </tr>
           </thead>
           <tbody>
             {data.map((m) => (
               <tr key={m.id} className="border-t border-border-muted hover:bg-highlight/25">
-                <td className="whitespace-nowrap px-4 py-2 font-mono">{m.member_no}</td>
-                <td className="px-4 py-2">{m.name}</td>
-                <td className="px-4 py-2">
+                <td className="whitespace-nowrap px-3 py-2 font-mono">{m.member_no}</td>
+                <td className="px-3 py-2">{m.name}</td>
+                <td className="max-w-[16rem] truncate px-3 py-2 text-text-muted" title={m.institution ?? ''}>{m.institution ?? '—'}</td>
+                <td className="whitespace-nowrap px-3 py-2">{m.city ?? '—'}</td>
+                <td className="whitespace-nowrap px-3 py-2">{[m.phone, m.mobile].filter(Boolean).join(' / ') || '—'}</td>
+                <td className="max-w-[12rem] truncate px-3 py-2" title={[m.segment, m.segment_detail].filter(Boolean).join(' · ')}>
+                  {[m.segment, m.segment_detail].filter(Boolean).join(' · ') || '—'}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-right">{m.balance ? rupiah(Number(m.balance)) : '—'}</td>
+                <td className="whitespace-nowrap px-3 py-2">
                   {m.is_active
                     ? <span className="rounded-full bg-success/20 px-2 py-0.5 text-xs text-success">Aktif</span>
                     : <span className="rounded-full bg-warning/20 px-2 py-0.5 text-xs text-warning">Nonaktif</span>}
                 </td>
-                <td className="whitespace-nowrap px-4 py-2 text-right">
+                <td className="whitespace-nowrap px-3 py-2 text-right">
                   {can('members', 'u') && <button className="btn-ghost !px-3 !py-1" onClick={() => setForm({ member: m })}>Ubah</button>}
                   {can('members', 'u') && <button className="btn-ghost !px-3 !py-1" disabled={toggle.isPending} onClick={() => toggle.mutate(m)}>{m.is_active ? 'Nonaktifkan' : 'Aktifkan'}</button>}
                   {can('members', 'd') && <button className="btn-ghost !px-3 !py-1 text-danger" onClick={() => void remove(m)}>Hapus</button>}
@@ -80,7 +93,7 @@ export default function MembersPage() {
               </tr>
             ))}
             {data.length === 0 && (
-              <tr><td colSpan={4} className="px-4 py-6 text-center text-text-muted">
+              <tr><td colSpan={9} className="px-4 py-6 text-center text-text-muted">
                 {isFetching ? 'Memuat…' : dq ? 'Tidak ada member yang cocok.' : 'Belum ada data member. Tambah satu per satu atau impor dari file CSV.'}
               </td></tr>
             )}
@@ -89,7 +102,7 @@ export default function MembersPage() {
       </div>
       <p className="text-xs text-text-muted">
         Menampilkan maksimal 200 member; persempit dengan kata kunci. Nomor ID disimpan kapital dan harus unik.
-        {can('members', 'c') && ' Impor CSV: kolom nomor,nama (opsional status Y/N).'}
+        {can('members', 'c') && ' Impor CSV: kolom Cust ID, Nama, Lembaga, Alamat, Kota, Propinsi, Telp., Sellular, Segment, Segment Detail, Balance.'}
       </p>
 
       {form && <MemberForm member={form.member} onClose={() => setForm(null)} onSaved={refresh} />}

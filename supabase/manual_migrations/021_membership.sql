@@ -7,6 +7,19 @@
 -- 4. Semua penulisan data member hanya lewat RPC (policy INSERT/UPDATE langsung dicabut).
 -- Aman diulang.
 
+-- ---------- 0. kolom data member (mengikuti berkas CSV pemilik) ----------
+-- CSV: Cust ID, Nama, Lembaga, Alamat, Kota, Propinsi, Telp., Sellular, Segment, Segment Detail, Balance.
+-- Cust ID = member_no, Nama = name. Balance = saldo lama; hanya disimpan & ditampilkan, tidak dipakai kasir.
+alter table members add column if not exists institution text;
+alter table members add column if not exists address text;
+alter table members add column if not exists city text;
+alter table members add column if not exists province text;
+alter table members add column if not exists phone text;
+alter table members add column if not exists mobile text;
+alter table members add column if not exists segment text;
+alter table members add column if not exists segment_detail text;
+alter table members add column if not exists balance numeric(14,2) not null default 0;
+
 -- ---------- 1. fitur & role ----------
 insert into features(key, label) values ('members', 'Membership')
 on conflict (key) do update set label = excluded.label;
@@ -52,8 +65,38 @@ revoke insert, update, delete on members from authenticated;
 create unique index if not exists members_no_upper_key on members (upper(btrim(member_no)));
 
 -- ---------- 3. cari member (kasir & pengelola) ----------
+-- pembantu: bersihkan satu kolom teks dari jsonb kiriman klien
+create or replace function _member_text(p jsonb, p_key text, p_max int)
+returns text language plpgsql immutable set search_path = public as $$
+declare v text;
+begin
+  v := nullif(btrim(coalesce(p->>p_key, '')), '');
+  if v is not null and length(v) > p_max then
+    raise exception 'kolom % terlalu panjang (maks. %)', p_key, p_max using errcode = '22001';
+  end if;
+  return v;
+end $$;
+
+-- pembantu: baca saldo (boleh "8.450" / "8450" / "1.234,50" / "1234.50")
+create or replace function _member_saldo(p jsonb)
+returns numeric language plpgsql immutable set search_path = public as $$
+declare v text;
+begin
+  v := replace(btrim(coalesce(p->>'saldo', '')), ' ', '');
+  if v = '' then return 0; end if;
+  if v ~ '^-?\d{1,3}(\.\d{3})+$' then v := replace(v, '.', '');
+  elsif v ~ '^-?\d{1,3}(\.\d{3})+,\d{1,2}$' then v := replace(replace(v, '.', ''), ',', '.');
+  elsif v ~ '^-?\d{1,12},\d{1,2}$' then v := replace(v, ',', '.');
+  elsif v !~ '^-?\d{1,12}(\.\d{1,2})?$' then
+    raise exception 'saldo "%" tidak valid (pakai angka, mis. 8450)', p->>'saldo' using errcode = '22023';
+  end if;
+  return v::numeric;
+end $$;
+
+drop function if exists find_member(text);
 create or replace function find_member(p_query text)
-returns table (id uuid, member_no text, name text, is_active boolean)
+returns table (id uuid, member_no text, name text, is_active boolean,
+               institution text, city text, segment text, segment_detail text, balance numeric)
 language plpgsql stable security definer set search_path = public as $$
 declare v_raw text; v_like text;
 begin
@@ -65,7 +108,8 @@ begin
   -- % dan _ di input pengguna diperlakukan sebagai huruf biasa
   v_like := replace(replace(replace(v_raw, '\', '\\'), '%', '\%'), '_', '\_');
   return query
-    select m.id, m.member_no, m.name, m.is_active
+    select m.id, m.member_no, m.name, m.is_active,
+           m.institution, m.city, m.segment, m.segment_detail, m.balance
       from members m
      where upper(m.member_no) = upper(v_raw)
         or m.member_no ilike v_like || '%'
@@ -75,9 +119,13 @@ begin
 end $$;
 
 -- ---------- 4. simpan / hapus member (RPC) ----------
-create or replace function member_save(p_id uuid, p_no text, p_name text, p_active boolean default true)
+drop function if exists member_save(uuid, text, text, boolean);
+create or replace function member_save(p_id uuid, p_no text, p_name text, p_active boolean default true,
+                                      p_data jsonb default '{}'::jsonb)
 returns uuid language plpgsql security definer set search_path = public as $$
 declare v_no text; v_name text; v_id uuid;
+  v_lembaga text; v_alamat text; v_kota text; v_prop text; v_telp text; v_sell text;
+  v_seg text; v_segdet text; v_saldo numeric;
 begin
   if p_id is null then
     if not has_perm('members', 'c') then raise exception 'forbidden' using errcode = '42501'; end if;
@@ -97,13 +145,31 @@ begin
     raise exception 'nomor member % sudah dipakai', v_no;
   end if;
 
+  v_lembaga := _member_text(p_data, 'lembaga', 100);
+  v_alamat  := _member_text(p_data, 'alamat', 300);
+  v_kota    := _member_text(p_data, 'kota', 100);
+  v_prop    := _member_text(p_data, 'propinsi', 100);
+  v_telp    := _member_text(p_data, 'telp', 50);
+  v_sell    := _member_text(p_data, 'sellular', 50);
+  v_seg     := _member_text(p_data, 'segment', 100);
+  v_segdet  := _member_text(p_data, 'segment_detail', 100);
+  v_saldo   := _member_saldo(p_data);
+
   if p_id is null then
-    insert into members(member_no, name, is_active) values (v_no, v_name, p_active) returning id into v_id;
+    insert into members(member_no, name, is_active, institution, address, city, province,
+                        phone, mobile, segment, segment_detail, balance)
+    values (v_no, v_name, p_active, v_lembaga, v_alamat, v_kota, v_prop,
+            v_telp, v_sell, v_seg, v_segdet, coalesce(v_saldo, 0))
+    returning id into v_id;
     insert into audit_log(actor_id, action, entity, entity_id, detail)
     values (auth.uid(), 'member.create', 'members', v_id::text,
             jsonb_build_object('member_no', v_no, 'name', v_name, 'active', p_active));
   else
-    update members set member_no = v_no, name = v_name, is_active = p_active where id = p_id returning id into v_id;
+    update members set member_no = v_no, name = v_name, is_active = p_active,
+           institution = v_lembaga, address = v_alamat, city = v_kota, province = v_prop,
+           phone = v_telp, mobile = v_sell, segment = v_seg, segment_detail = v_segdet,
+           balance = coalesce(v_saldo, 0)
+     where id = p_id returning id into v_id;
     if v_id is null then raise exception 'member tidak ditemukan'; end if;
     insert into audit_log(actor_id, action, entity, entity_id, detail)
     values (auth.uid(), 'member.update', 'members', v_id::text,
@@ -133,7 +199,9 @@ end $$;
 create or replace function import_members(p_rows jsonb, p_overwrite boolean default false)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
-  r record; v_no text; v_name text; v_active boolean; v_id uuid;
+  r record; v_no text; v_name text; v_active boolean; v_id uuid; v_ok boolean;
+  v_lembaga text; v_alamat text; v_kota text; v_prop text; v_telp text; v_sell text;
+  v_seg text; v_segdet text; v_saldo numeric;
   n_ins int := 0; n_upd int := 0; n_skip int := 0; n_bad int := 0; v_bad jsonb := '[]'::jsonb;
 begin
   if not has_perm('members', 'c') then raise exception 'forbidden' using errcode = '42501'; end if;
@@ -141,14 +209,30 @@ begin
   if jsonb_typeof(p_rows) <> 'array' then raise exception 'data tidak valid'; end if;
   if jsonb_array_length(p_rows) > 50000 then raise exception 'maksimal 50.000 baris per impor'; end if;
 
-  for r in
-    select upper(btrim(coalesce(x->>'member_no', ''))) as no,
-           btrim(coalesce(x->>'name', '')) as name,
-           coalesce((x->>'is_active')::boolean, true) as active
-      from jsonb_array_elements(p_rows) x
+  for r in select x as j from jsonb_array_elements(p_rows) x
   loop
-    v_no := r.no; v_name := r.name; v_active := r.active;
-    if v_no !~ '^[A-Z0-9][A-Z0-9._/-]{0,39}$' or v_name = '' or length(v_name) > 100 then
+    v_no := upper(btrim(coalesce(r.j->>'member_no', '')));
+    v_name := btrim(coalesce(r.j->>'name', ''));
+    v_active := coalesce((r.j->>'is_active')::boolean, true);
+    v_ok := true;
+    begin
+      if v_no !~ '^[A-Z0-9][A-Z0-9._/-]{0,39}$' or v_name = '' or length(v_name) > 100 then
+        raise exception 'nomor/nama tidak valid' using errcode = '22023';
+      end if;
+      v_lembaga := _member_text(r.j, 'lembaga', 100);
+      v_alamat  := _member_text(r.j, 'alamat', 300);
+      v_kota    := _member_text(r.j, 'kota', 100);
+      v_prop    := _member_text(r.j, 'propinsi', 100);
+      v_telp    := _member_text(r.j, 'telp', 50);
+      v_sell    := _member_text(r.j, 'sellular', 50);
+      v_seg     := _member_text(r.j, 'segment', 100);
+      v_segdet  := _member_text(r.j, 'segment_detail', 100);
+      v_saldo   := _member_saldo(r.j);
+    exception when others then
+      v_ok := false;
+    end;
+
+    if not v_ok then
       n_bad := n_bad + 1;
       if jsonb_array_length(v_bad) < 10 then
         v_bad := v_bad || to_jsonb(coalesce(nullif(v_no, ''), '(kosong)'));
@@ -158,10 +242,26 @@ begin
 
     select id into v_id from members where upper(btrim(member_no)) = v_no;
     if v_id is null then
-      insert into members(member_no, name, is_active) values (v_no, v_name, v_active);
+      insert into members(member_no, name, is_active, institution, address, city, province,
+                          phone, mobile, segment, segment_detail, balance)
+      values (v_no, v_name, v_active, v_lembaga, v_alamat, v_kota, v_prop,
+              v_telp, v_sell, v_seg, v_segdet, coalesce(v_saldo, 0));
       n_ins := n_ins + 1;
     elsif p_overwrite then
-      update members set name = v_name, is_active = v_active where id = v_id;
+      -- hanya kolom yang ADA di file yang ditimpa; kolom yang tidak dikirim dibiarkan
+      update members set
+        name = v_name,
+        is_active = v_active,
+        institution    = case when r.j ? 'lembaga'        then v_lembaga else institution end,
+        address        = case when r.j ? 'alamat'         then v_alamat  else address end,
+        city           = case when r.j ? 'kota'           then v_kota    else city end,
+        province       = case when r.j ? 'propinsi'       then v_prop    else province end,
+        phone          = case when r.j ? 'telp'           then v_telp    else phone end,
+        mobile         = case when r.j ? 'sellular'       then v_sell    else mobile end,
+        segment        = case when r.j ? 'segment'        then v_seg     else segment end,
+        segment_detail = case when r.j ? 'segment_detail' then v_segdet  else segment_detail end,
+        balance        = case when r.j ? 'saldo'          then coalesce(v_saldo, 0) else balance end
+       where id = v_id;
       n_upd := n_upd + 1;
     else
       n_skip := n_skip + 1;
@@ -297,11 +397,13 @@ begin
 end $$;
 
 revoke all on function find_member(text) from public, anon;
-revoke all on function member_save(uuid, text, text, boolean) from public, anon;
+revoke all on function member_save(uuid, text, text, boolean, jsonb) from public, anon;
 revoke all on function member_delete(uuid) from public, anon;
 revoke all on function import_members(jsonb, boolean) from public, anon;
+revoke all on function _member_text(jsonb, text, int) from public, anon, authenticated;
+revoke all on function _member_saldo(jsonb) from public, anon, authenticated;
 revoke all on function create_sale(jsonb, text, payment_method, numeric, uuid, uuid) from public, anon;
-grant execute on function find_member(text), member_save(uuid, text, text, boolean),
+grant execute on function find_member(text), member_save(uuid, text, text, boolean, jsonb),
                     member_delete(uuid), import_members(jsonb, boolean),
                     create_sale(jsonb, text, payment_method, numeric, uuid, uuid)
   to authenticated;

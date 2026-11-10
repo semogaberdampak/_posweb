@@ -290,6 +290,18 @@ check('MEMBER: impor CSV (tanpa timpa) melewati nomor yang sudah ada',
   (await as(AGEN, `select import_members(${lit([{ member_no: 'M-011', name: 'Impor Baru', is_active: true }, { member_no: 'M-001', name: 'Nama Lain', is_active: true }])}, false) as r`))[0].r.inserted === 1)
 check('MEMBER: impor dengan timpa memperbarui nama',
   (await as(AGEN, `select import_members(${lit([{ member_no: 'M-001', name: 'Member Satu Baru', is_active: true }])}, true) as r`))[0].r.updated === 1)
+const memFull = { lembaga: 'Paroki Katedral', alamat: 'Jl. Katedral 7', kota: 'Semarang', propinsi: 'Jawa Tengah', telp: '024123456', sellular: '081234567890', segment: 'Member', segment_detail: 'Pastor', saldo: '12.500' }
+check('MEMBER: kolom CSV pemilik (lembaga/kota/segment/saldo) tersimpan',
+  (await as(AGEN, `select member_save(null,'M-012','Romo Antonius',true,${lit(memFull)}) as id`))[0]?.id !== null &&
+  (await findM(KR.KRANGGAN, 'M-012'))[0]?.city === 'Semarang' &&
+  (await findM(KR.KRANGGAN, 'M-012'))[0]?.segment_detail === 'Pastor' &&
+  Number((await findM(KR.KRANGGAN, 'M-012'))[0]?.balance) === 12500)
+check('MEMBER: saldo bersimbol ribuan & koma dibaca angka',
+  Number((await q(`select _member_saldo('{"saldo":"1.234,50"}'::jsonb) as v`))[0].v) === 1234.5)
+check('MEMBER: timpa impor hanya mengubah kolom yang dikirim',
+  (await as(AGEN, `select import_members(${lit([{ member_no: 'M-012', name: 'Romo Antonius Baru' }])}, true) as r`))[0].r.updated === 1 &&
+  (await findM(KR.KRANGGAN, 'M-012'))[0]?.name === 'Romo Antonius Baru' &&
+  (await findM(KR.KRANGGAN, 'M-012'))[0]?.city === 'Semarang')
 check('MEMBER: member yang dipakai transaksi tidak bisa dihapus (disarankan nonaktifkan)',
   /nonaktifkan/.test(await err(AGEN, `select member_delete((select id from members where member_no='M-001'))`) ?? ''))
 check('MEMBER: agen member hanya bisa DIBACA pada fitur lain',

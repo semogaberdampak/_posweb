@@ -11,7 +11,8 @@ export function ImportMembersModal({ canOverwrite, onClose }: { canOverwrite: bo
   const [overwrite, setOverwrite] = useState(false)
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('')
   const [result, setResult] = useState<MemberImportResult | null>(null)
-  const ready = !!parsed && parsed.rows.length > 0 && parsed.problems.length === 0
+  // Baris bermasalah dilewati; impor tetap boleh jalan selama masih ada baris valid.
+  const ready = !!parsed && parsed.rows.length > 0
 
   async function pick(f: File | undefined) {
     setResult(null); setErr(''); setParsed(null); setFileName(f?.name ?? '')
@@ -22,7 +23,7 @@ export function ImportMembersModal({ canOverwrite, onClose }: { canOverwrite: bo
 
   async function run() {
     if (!ready || !parsed) return
-    if (overwrite && !window.confirm('Nama & status member yang nomornya sudah ada akan DITIMPA dengan isi file. Lanjutkan?')) return
+    if (overwrite && !window.confirm(`Nama, status, dan kolom lain yang ada di file akan DITIMPA untuk member yang nomornya sudah ada${parsed.problems.length ? `; ${parsed.problems.length} baris bermasalah dilewati` : ''}. Lanjutkan?`)) return
     setBusy(true); setErr('')
     try {
       setResult(await importMembers(parsed.rows, overwrite))
@@ -47,24 +48,26 @@ export function ImportMembersModal({ canOverwrite, onClose }: { canOverwrite: bo
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-text-muted">
-            File berisi dua kolom wajib: <b>nomor</b> dan <b>nama</b> (judul kolom di baris pertama). Kolom ketiga <b>status</b> (Y/N) opsional.
-            Di Excel: Simpan sebagai → CSV. Kolom nomor wajib berformat Teks agar nomor berawalan nol/panjang tidak rusak.
+            Kolom wajib: <b>Cust ID</b> (nomor member) dan <b>Nama</b>. Kolom lain ikut disimpan bila ada:
+            <b>Lembaga, Alamat, Kota, Propinsi, Telp., Sellular, Segment, Segment Detail, Balance</b> (saldo).
+            Kolom <b>status</b> (Y/N) opsional. Format ringkas <b>nomor,nama</b> juga diterima.
+            Di Excel: Simpan sebagai → CSV. Kolom Cust ID sebaiknya berformat Teks agar nomor tidak rusak.
           </p>
           <input type="file" accept=".csv,text/csv" className="block w-full text-sm" onChange={(e) => void pick(e.target.files?.[0])} />
           <label className={`flex items-start gap-2 text-sm ${canOverwrite ? '' : 'opacity-50'}`}>
             <input type="checkbox" className="mt-1" disabled={!canOverwrite} checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
-            <span><b>Timpa member yang sudah ada</b>: nama & status diperbarui dari file (butuh hak Ubah). Bila tidak dicentang, nomor yang sudah ada dilewati.</span>
+            <span><b>Timpa member yang sudah ada</b>: hanya kolom yang ada di file yang diperbarui (butuh hak Ubah). Bila tidak dicentang, nomor yang sudah ada dilewati.</span>
           </label>
           {parsed && (
             <div className="rounded-2xl border border-border-muted bg-bg-dark p-3 text-sm">
-              <div>{fileName}: <b>{parsed.rows.length}</b> baris valid{parsed.inactive > 0 ? ` (${parsed.inactive} ditandai nonaktif)` : ''}</div>
+              <div>{fileName}: <b>{parsed.rows.length}</b> baris valid{parsed.inactive > 0 ? ` (${parsed.inactive} ditandai nonaktif)` : ''}{parsed.repaired > 0 ? ` · ${parsed.repaired} baris kolom kosong dirapikan otomatis` : ''}</div>
               {parsed.problems.length > 0 && (
                 <ul className="mt-2 list-disc space-y-0.5 pl-5 text-danger">
                   {parsed.problems.slice(0, 8).map((p) => <li key={p}>{p}</li>)}
                   {parsed.problems.length > 8 && <li>… dan {parsed.problems.length - 8} masalah lain</li>}
                 </ul>
               )}
-              {parsed.problems.length > 0 && <div className="mt-2 text-text-muted">Perbaiki file lalu pilih ulang. Impor tidak dijalankan selama masih ada masalah.</div>}
+              {parsed.problems.length > 0 && <div className="mt-2 text-text-muted">Baris bermasalah di atas akan <b>dilewati</b>; sisanya tetap diimpor. Perbaiki file lalu pilih ulang bila ingin baris itu ikut.</div>}
             </div>
           )}
           {err && <p role="alert" className="text-sm text-danger">{err}</p>}

@@ -230,6 +230,17 @@ console.log('MEMBER: kasir tidak bisa mengubah/menghapus member:', await call(1,
 const impM = async (obj, ow) => { try { return JSON.stringify((await as(5, `select import_members('${JSON.stringify(obj).replace(/'/g, "''")}'::jsonb, ${ow}) as r`))[0].r) } catch (e) { return 'ERR: ' + e.message } }
 console.log('MEMBER: impor 3 baris (1 ganda, 1 rusak)          :', await impM([{ member_no: 'M-101', name: 'Siti', is_active: true }, { member_no: 'M-100', name: 'Nama Lain', is_active: true }, { member_no: '', name: 'Tanpa Nomor' }], false))
 console.log('MEMBER: impor dengan timpa memperbarui nama       :', await impM([{ member_no: 'm-100', name: 'Budi Baru', is_active: true }], true), '| baris sekarang:', (await q(`select name from members where member_no='M-100'`))[0].name)
+console.log('MEMBER: simpan kolom lengkap (kota, segment, saldo):', await call(5, `select member_save(null,'M-102','Romo Yohanes',true,'{"lembaga":"Paroki Katedral","alamat":"Jl. Katedral 7","kota":"Jakarta","propinsi":"DKI Jakarta","telp":"021123456","sellular":"081234567890","segment":"Member","segment_detail":"Pastor","saldo":"8.450"}'::jsonb)`))
+const m102 = (await q(`select city, institution, segment_detail, balance from members where member_no='M-102'`))[0]
+console.log('MEMBER: kolom tersimpan sesuai CSV pemilik        :', m102?.city === 'Jakarta' && m102?.institution === 'Paroki Katedral' && m102?.segment_detail === 'Pastor' && Number(m102?.balance) === 8450)
+console.log('MEMBER: saldo "1.234,50" dibaca 1234,50           :', Number((await q(`select _member_saldo('{"saldo":"1.234,50"}'::jsonb) as v`))[0].v) === 1234.5)
+console.log('MEMBER: saldo bukan angka ditolak                 :', await call(5, `select member_save(null,'M-103','Salah Saldo',true,'{"saldo":"dua ribu"}'::jsonb)`))
+console.log('MEMBER: kasir melihat kota/segment hasil cari     :', (await findm(1, 'romo')).includes('Jakarta') && (await findm(1, 'romo')).includes('Pastor'))
+console.log('MEMBER: impor kolom lengkap                       :', await impM([{ member_no: 'M-104', name: 'Ibu Maria', is_active: true, lembaga: 'Sekolah', kota: 'Bandung', segment: 'Member', segment_detail: 'Guru/Dosen', saldo: '69500' }], false))
+const m104 = (await q(`select city, segment_detail, balance from members where member_no='M-104'`))[0]
+console.log('MEMBER: kolom hasil impor tersimpan               :', m104?.city === 'Bandung' && m104?.segment_detail === 'Guru/Dosen' && Number(m104?.balance) === 69500)
+console.log('MEMBER: timpa tanpa kolom tidak mengosongkan      :', await impM([{ member_no: 'M-104', name: 'Ibu Maria Baru' }], true), '| kota:', (await q(`select city from members where member_no='M-104'`))[0].city)
+console.log('MEMBER: baris bersaldo salah dihitung invalid     :', await impM([{ member_no: 'M-105', name: 'Salah Saldo', saldo: 'x' }], false))
 const disc = (mem) => (mem === null
   ? sale(1, [{ product_id: A, qty: 1, discount_pct: 5 }], null, 'qris')
   : sale(1, [{ product_id: A, qty: 1, discount_pct: 5 }], mem, 'qris'))
@@ -254,4 +265,4 @@ console.log('STATUS:', JSON.stringify(await q(`
  union all select '018', to_regclass('public.daily_closings') is not null
  union all select '019', to_regprocedure('public.closing_status(date,date,uuid)') is not null
  union all select '020', to_regprocedure('public._is_kasir(uuid)') is not null
- union all select '021', to_regprocedure('public.member_save(uuid,text,text,boolean)') is not null`)))
+ union all select '021', to_regprocedure('public.member_save(uuid,text,text,boolean,jsonb)') is not null`)))
