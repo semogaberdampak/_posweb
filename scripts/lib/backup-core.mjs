@@ -14,6 +14,7 @@ export const TABLES = [
   ['profiles', ['id']], ['user_permissions', ['user_id', 'feature_key']], ['products', ['id']], ['product_costs', ['product_id']],
   ['product_price_history', ['id']], ['stock', ['branch_id', 'product_id']], ['stock_movements', ['id']], ['members', ['id']],
   ['sales', ['id']], ['sale_items', ['id']], ['audit_log', ['id']], ['print_templates', ['kind']],
+  ['daily_closings', ['id']],
 ]
 const PAGE = 1000
 export const DIR_RE = /^pos-\d{8}-\d{6}$/

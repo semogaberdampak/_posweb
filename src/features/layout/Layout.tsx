@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { listBranches } from '../users/api'
-import { ArrowLeftRight, Boxes, ClipboardCheck, DollarSign, Moon, Package, Settings, FileText, ShieldCheck, ShoppingCart, Sun, type LucideIcon } from 'lucide-react'
+import { ArrowLeftRight, Boxes, ClipboardCheck, DollarSign, Lock, Moon, Package, Settings, FileText, ShieldCheck, ShoppingCart, Sun, type LucideIcon } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { Sidebar } from './Sidebar'
 import { useTheme } from '../settings/theme'
@@ -12,6 +12,7 @@ const NAV: { to: string; label: string; feature: string; icon: LucideIcon; admin
   { to: '/stok', label: 'Stok & Pengadaan', feature: 'stock', icon: Boxes },
   { to: '/mutasi-stok', label: 'Mutasi Stok', feature: 'stock_move', icon: ArrowLeftRight },
   { to: '/laporan', label: 'Rekap Penjualan', feature: 'sales_recap', icon: ClipboardCheck },
+  { to: '/tutup-kasir', label: 'Tutup Kasir', feature: 'daily_close', icon: Lock },
   { to: '/keuangan', label: 'Keuangan', feature: 'finance', icon: DollarSign },
   { to: '/pengguna', label: 'Pengguna & Role', feature: 'users', icon: ShieldCheck },
   { to: '/format-nota', label: 'Format Nota', feature: 'settings', icon: FileText, adminOnly: true },

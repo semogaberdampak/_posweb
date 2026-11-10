@@ -149,6 +149,32 @@ console.log('idem baris bertanda kunci itu     :', JSON.stringify(await q(`selec
 console.log('idem kunci sama oleh kasir lain   :', await saleIdem(1, rid))
 console.log('idem tanpa kunci tetap bisa       :', (await saleIdem(5, null)).slice(0, 26) + '…')
 
+// ===== uji 018: tutup transaksi harian =====
+await run('018', sql('supabase/manual_migrations/018_daily_close.sql'))
+await run('018 ulang (idempoten)', sql('supabase/manual_migrations/018_daily_close.sql'))
+const today = (await q(`select (now() at time zone 'Asia/Jakarta')::date::text d`))[0].d
+const pusatDay = (await q(`select count(*) filter (where status='completed')::int c,
+  coalesce(sum(total) filter (where status='completed'),0)::int net,
+  coalesce(sum(total) filter (where status='completed' and payment_method='cash'),0)::int cash
+  from sales where branch_id='${pusat}' and created_at >= '${today}'::date::timestamp at time zone 'Asia/Jakarta'
+   and created_at < ('${today}'::date + 1)::timestamp at time zone 'Asia/Jakarta'`))[0]
+const dsum = async (n, br, d = today) => { try { return (await as(n, `select daily_close_summary(${br ? `'${br}'` : 'null'}, '${d}') as r`))[0].r } catch (e) { return 'ERR: ' + e.message } }
+const kSum = await dsum(1, null)
+console.log('TUTUP: ringkasan kasir = hitungan langsung tabel sales :', kSum.totals.count, '/', pusatDay.c, '| total', kSum.totals.net, '/', pusatDay.net, '| tunai', kSum.cash_expected, '/', pusatDay.cash)
+console.log('TUTUP: keuangan boleh melihat ringkasan             :', (await dsum(3, null)).branch_name)
+console.log('TUTUP: pengadaan (tanpa hak daily_close) ditolak     :', await dsum(2, null))
+const cashPlus = pusatDay.cash + 1500
+console.log('TUTUP: kasir menutup hari ini                        :', JSON.stringify((await as(1, `select close_day(null, '${today}', ${cashPlus}, 'uji tutup') as r`))[0].r.closing))
+console.log('TUTUP: menutup ulang ditolak                        :', await call(1, `select close_day(null, '${today}', 0, null)`))
+console.log('TUTUP: tanggal tanpa transaksi ditolak              :', await call(1, `select close_day(null, '2001-01-01', 0, null)`))
+console.log('TUTUP: tanggal yang belum terjadi ditolak           :', await call(1, `select close_day(null, '2100-01-01', 0, null)`))
+console.log('TUTUP: keuangan TIDAK boleh menutup                :', await call(3, `select close_day(null, '${today}', 0, null)`))
+console.log('TUTUP: superadmin boleh melihat cabang lain         :', await call(5, `select daily_close_summary('${cab1}', '${today}')`))
+console.log('TUTUP: kasir cabang lain ditolak                    :', await call(1, `select close_day('${cab1}', '${today}', 0, null)`))
+console.log('TUTUP: baca tabel: kasir PUSAT / CAB1               :', (await as(1, 'select * from daily_closings')).length, '/', (await as(4, 'select * from daily_closings')).length, '(harus 1 / 0)')
+console.log('TUTUP: tulis langsung ke tabel ditolak              :', await call(1, `insert into daily_closings(branch_id, close_date, closed_by) values ('${pusat}', '2001-01-01', '${U(1)}')`))
+console.log('TUTUP: tercatat di audit log                        :', (await q(`select count(*)::int n from audit_log where action='daily.close'`))[0].n >= 1)
+
 // status migrasi (dipakai juga untuk panduan pemilik)
 console.log('STATUS:', JSON.stringify(await q(`
  select '002' as migrasi, exists(select 1 from information_schema.columns where table_name='products' and column_name='author') as sudah
@@ -158,4 +184,5 @@ console.log('STATUS:', JSON.stringify(await q(`
  union all select '006', exists(select 1 from pg_trigger where tgname='enforce_email_domain')
  union all select '007', to_regprocedure('public.revoke_user_sessions(uuid)') is not null
  union all select '008', to_regprocedure('public.my_scope()') is not null
- union all select '017', exists(select 1 from information_schema.columns where table_name='sales' and column_name='request_id')`)))
+ union all select '017', exists(select 1 from information_schema.columns where table_name='sales' and column_name='request_id')
+ union all select '018', to_regclass('public.daily_closings') is not null`)))

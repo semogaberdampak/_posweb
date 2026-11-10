@@ -242,6 +242,32 @@ check('EKSPOR: role tanpa hak rekap ditolak', /forbidden/.test(await err(PENG, `
 check('EKSPOR: melebihi batas baris ditolak dengan pesan jelas', /terlalu banyak transaksi/.test(await err(SA, `select sales_export(${nowYM.y},${nowYM.m},null,1)`) ?? ''))
 check('EKSPOR: setiap unduhan tercatat di audit log', (await q(`select count(*)::int n from audit_log where action='sales.export'`))[0].n >= 2)
 
+// ---------- tutup transaksi harian ----------
+const hariIni = (await q(`select to_char(now() at time zone 'Asia/Jakarta','YYYY-MM-DD') d`))[0].d
+const tutupSum = async (u, br, d = hariIni) => (await as(u, `select daily_close_summary(${br ? `'${B[br]}'` : 'null'}, '${d}') as r`))[0].r
+const kSum = await tutupSum(KR.KRANGGAN), kDay = await rr(KR.KRANGGAN, hariIni, hariIni, null)
+check('TUTUP: ringkasan hari = Rekap Penjualan hari itu (jumlah, total, tunai)',
+  kSum.totals.count === kDay.summary.count && Number(kSum.totals.net) === Number(kDay.summary.total) && Number(kSum.cash_expected) === Number(kDay.by_method.cash ?? 0),
+  JSON.stringify(kSum.totals) + ' vs ' + JSON.stringify(kDay.summary))
+check('TUTUP: hari yang belum ditutup -> closing null', kSum.closing === null && kSum.changed_after_close === false)
+const kas = Number(kSum.cash_expected) + 2500
+const close1 = (await as(KR.KRANGGAN, `select close_day('${B.KRANGGAN}','${hariIni}', ${kas}, 'uji tutup kasir') as r`))[0].r
+check('TUTUP: kasir menutup hari cabangnya; snapshot & selisih tersimpan',
+  !!close1.closing && close1.closing.total_count === kSum.totals.count && Number(close1.closing.net) === Number(kSum.totals.net) && Number(close1.closing.cash_difference) === 2500,
+  JSON.stringify(close1.closing))
+check('TUTUP: menutup dua kali ditolak', /sudah ditutup/.test(await err(KR.KRANGGAN, `select close_day('${B.KRANGGAN}','${hariIni}', 0, null)`) ?? ''))
+check('TUTUP: kasir lain tidak bisa menutup / melihat cabang itu',
+  /forbidden/.test(await err(KR.PAULUS, `select close_day('${B.KRANGGAN}','${hariIni}', 0, null)`) ?? '') &&
+  (await as(KR.PAULUS, 'select count(*)::int n from daily_closings'))[0].n === 0 &&
+  (await as(KR.KRANGGAN, 'select count(*)::int n from daily_closings'))[0].n === 1)
+check('TUTUP: tanggal tanpa transaksi & tanggal yang belum terjadi ditolak',
+  /belum ada transaksi/.test(await err(KR.KRANGGAN, `select close_day(null,'2000-02-01',0,null)`) ?? '') &&
+  /belum terjadi/.test(await err(KR.KRANGGAN, `select close_day(null,'2100-01-01',0,null)`) ?? ''))
+check('TUTUP: keuangan hanya boleh melihat, pengadaan ditolak',
+  /forbidden/.test(await err(KEU, `select close_day(null,'${hariIni}',0,null)`) ?? '') &&
+  (await tutupSum(KEU, null)).totals.count >= 0 && /forbidden/.test(await err(PENG, `select daily_close_summary(null,'${hariIni}')`) ?? ''))
+check('TUTUP: tulis langsung ke tabel ditolak', !!(await err(KR.KRANGGAN, `insert into daily_closings(branch_id, close_date, closed_by) values ('${B.KRANGGAN}','2000-01-01','${KR.KRANGGAN}')`)))
+
 // ---------- keutuhan ----------
 console.log('')
 const mism = await q(`select s.branch_id, s.product_id, s.qty, coalesce(m.t,0)::int t from stock s left join (select branch_id, product_id, sum(qty_change) t from stock_movements group by 1,2) m using (branch_id, product_id) where s.qty <> coalesce(m.t,0)`)

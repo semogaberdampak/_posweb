@@ -9,6 +9,7 @@ import StockPage from './features/stock/StockPage'
 import StockMovePage from './features/stock/StockMovePage'
 import SettingsPage from './features/settings/SettingsPage'
 import SalesRecapPage from './features/sales/SalesRecapPage'
+import DailyClosePage from './features/closing/DailyClosePage'
 import FinancePage from './features/finance/FinancePage'
 import FormatNotaPage from './features/print/FormatNotaPage'
 
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/mutasi-stok" element={<RequirePerm feature="stock_move"><StockMovePage /></RequirePerm>} />
           <Route path="/stok" element={<RequirePerm feature="stock"><StockPage /></RequirePerm>} />
           <Route path="/laporan" element={<RequirePerm feature="sales_recap"><SalesRecapPage /></RequirePerm>} />
+          <Route path="/tutup-kasir" element={<RequirePerm feature="daily_close"><DailyClosePage /></RequirePerm>} />
           <Route path="/keuangan" element={<RequirePerm feature="finance"><FinancePage /></RequirePerm>} />
           <Route path="/pengguna" element={<RequirePerm feature="users"><UsersPage /></RequirePerm>} />
           <Route path="/format-nota" element={<RequirePerm feature="settings"><FormatNotaPage /></RequirePerm>} />

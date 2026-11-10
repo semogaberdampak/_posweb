@@ -36,6 +36,7 @@ supabase/manual_migrations/015_report_range.sql  fungsi *_range(p_from,p_to,...)
 src/shared/period.ts + PeriodPicker.tsx     periode laporan: Bulanan atau Rentang tanggal (pintasan Hari ini/Kemarin/7/30 hari/Bulan ini), validasi, label, tag nama berkas
 supabase/manual_migrations/014_finance.sql          RPC finance_summary (bulan WIB; total, per metode/cabang/hari, estimasi laba bila punya cost_prices) + _cost_val (internal)
 src/features/finance/                       FinancePage, exportFinance.ts (Excel 4 sheet), api.ts
+src/features/closing/                       DailyClosePage (/tutup-kasir), api.ts
 src/lib/escpos.ts                           struk ESC/POS teks yang MENGIKUTI Format Nota (kolom 48/32, ASCII-aman)
 src/lib/webusb-printer.ts                   cetak langsung via WebUSB (pairing kelas printer, kirim bertahap, gagal rapi -> cadangan cetak browser)
 src/types/webusb.d.ts                       tipe WebUSB minimal
@@ -47,6 +48,7 @@ scripts/kasir-kiosk.cmd                     membuka Chrome/Edge mode --kiosk-pri
 deploy/htaccess.example                     contoh SPA fallback Apache bila di subfolder (VITE_BASE=/_posweb/); vercel.json di akar = SPA fallback + header keamanan untuk Vercel
 supabase/manual_migrations/012_sales_export.sql     RPC sales_export (semua transaksi + rincian barang sebulan, dicatat di audit_log)
 supabase/manual_migrations/017_sale_idempotency.sql sales.request_id unik + create_sale(p_request_id): retry/klik ganda tidak menggandakan transaksi
+supabase/manual_migrations/018_daily_close.sql     tabel daily_closings (snapshot tutup kasir) + RPC daily_close_summary & close_day + fitur daily_close
 scripts/backup.mjs + scripts/lib/backup-core.mjs + scripts/schedule-backup.ps1   backup mandiri (npm run backup / backup:verify), jadwal harian Windows
 src/features/sales/exportXlsx.ts            pembuat Excel (3 sheet), dimuat lazy saat tombol "Unduh Excel" ditekan
 supabase/checks/integritas_stok.sql         pemeriksaan keutuhan (baca saja): stok = riwayat, tanpa minus, total transaksi cocok
@@ -101,8 +103,8 @@ Hosting: paket gratis Supabase (500 MB DB, tanpa backup otomatis, proyek dijeda 
 
 ## 5. Peran & hak akses (RBAC berbasis permission, bukan nama role)
 Tabel: `roles`, `features`, `role_permissions(role_id, feature_key, can_create/read/update/delete)`, `profiles(id, full_name, branch_id, role_id, is_active)`. Role = paket permission (template). Granular: tiap USER bisa punya pengecualian per fitur di `user_permissions` (NULL = ikut role, true/false = menimpa); `has_perm()` memakai pengecualian dulu, baru role. Superadmin mengatur semuanya di halaman Pengguna & Hak Akses (matriks Tambah/Lihat/Ubah/Hapus per fitur). Fitur baru = baris baru di tabel `features` → otomatis muncul di matriks. `roles.all_branches=true` → boleh lihat semua cabang.
-Role bawaan: `superadmin` (semua, lintas cabang), `kasir` (pos c/r, sales_recap r; hanya cabangnya), `kabag` (sales_recap r, sales_void r/u; lintas cabang), `pengadaan` (products, stock, purchasing c/r/u; cost_prices c/r/u; lintas cabang), `keuangan` (sales_recap r, finance r, cost_prices r; lintas cabang).
-Fitur (`features.key`): pos, sales_recap, sales_void, products, stock, purchasing, members, finance, users, roles, audit, settings, cost_prices, stock_move.
+Role bawaan: `superadmin` (semua, lintas cabang), `kasir` (pos c/r, sales_recap r, daily_close c/r; hanya cabangnya), `kabag` (sales_recap r, sales_void r/u, daily_close r; lintas cabang), `pengadaan` (products, stock, purchasing c/r/u; cost_prices c/r/u; lintas cabang), `keuangan` (sales_recap r, finance r, daily_close r, cost_prices r; lintas cabang).
+Fitur (`features.key`): pos, sales_recap, sales_void, products, stock, purchasing, members, finance, users, roles, audit, settings, cost_prices, stock_move, daily_close.
 Ide role tambahan yang sudah didiskusikan (belum dibuat): supervisor kasir, gudang, manajer cabang, auditor (read-only), marketing/member.
 
 ## 6. Aturan keamanan (WAJIB dipatuhi)
@@ -126,17 +128,17 @@ Ide role tambahan yang sudah didiskusikan (belum dibuat): supervisor kasir, guda
 - Impor: `npm run import:products -- file.xlsx --dry-run` lalu tanpa `--dry-run`. Default produk yang sudah ada DILEWATI (tidak menimpa harga yang diubah di aplikasi); `--update` menimpa. Stok awal: `--stock-branch=KODE` (hanya mengisi stok yang belum ada).
 
 ## 8. Cara menjalankan
-1. Supabase SQL Editor (role `postgres`): jalankan `schema.sql` lalu `manual_migrations/002` → `003` → `004` → `005` → `006` → `007` → `008` → `009` → `010` → `011` → `012` → `013` → `014` → `015` → `016` → `017` berurutan. `schema.sql` HANYA untuk database kosong (ada penjaga; jangan dijalankan ulang setelah migrasi). Setelah 005, pasang Edge Function `create-user` dan `reset-password` (Supabase → Edge Functions → Deploy a new function → Via Editor, nama `create-user`, tempel isi `supabase/functions/create-user/index.ts`; biarkan Verify JWT aktif; **WAJIB** isi secret `ALLOWED_ORIGIN` = alamat web aplikasi, mis. `https://pos.takom.id` — tanpa secret itu kedua fungsi menolak semua permintaan, bukan terbuka untuk semua situs). Fungsi ini BELUM diuji di Supabase.
+1. Supabase SQL Editor (role `postgres`): jalankan `schema.sql` lalu `manual_migrations/002` → `003` → `004` → `005` → `006` → `007` → `008` → `009` → `010` → `011` → `012` → `013` → `014` → `015` → `016` → `017` → `018` berurutan. `schema.sql` HANYA untuk database kosong (ada penjaga; jangan dijalankan ulang setelah migrasi). Setelah 005, pasang Edge Function `create-user` dan `reset-password` (Supabase → Edge Functions → Deploy a new function → Via Editor, nama `create-user`, tempel isi `supabase/functions/create-user/index.ts`; biarkan Verify JWT aktif; **WAJIB** isi secret `ALLOWED_ORIGIN` = alamat web aplikasi, mis. `https://pos.takom.id` — tanpa secret itu kedua fungsi menolak semua permintaan, bukan terbuka untuk semua situs). Fungsi ini BELUM diuji di Supabase.
 2. Buat user di Authentication → Users (centang Auto Confirm), lalu isi `profiles` dengan SQL (lihat README). User tanpa baris `profiles` aktif akan langsung dikeluarkan oleh aplikasi.
 3. `.env` dari `.env.example` (URL + anon key). `.env.import` dari `.env.import.example` (hanya untuk skrip impor, di komputer pemilik).
 4. `npm install` → `npm run dev` (alamat dicetak di terminal, bawaan http://127.0.0.1:3000). Cek: `npx tsc --noEmit`, `npm run build`, `npm run test:sql`, `npm run test:e2e`, `npm run test:csv`, `npm run test:print`, `npm run test:backup`, `npm run test:xlsx`, `npm run test:printing`, `npm run test:merge`, `npm run test:finance`, `npm run test:escpos`, `npm run test:period`, `npm run test:top`, `npm run test:sidebar`. Jalankan semua tes setiap mengubah SQL atau alur penjualan/stok; tambahkan kasus baru bila ada fitur baru.
 Catatan lingkungan: shell sandbox kadang `sh` (tanpa brace expansion). Tailwind v4: jangan `@apply` kelas kustom; pakai `@utility`.
 
 ## 9. Status
-**Selesai:** Pengguna & Hak Akses granular (migrasi 005 + halaman + Edge Function; SQL lolos tes lokal, UI/Edge Function belum diuji di Supabase), login, layout/tema, kasir (scan barcode, diskon per produk, bayar, struk), produk & harga (daftar, tambah/ubah, detail card, harga beli rahasia), stok per cabang (halaman Stok & Pengadaan, strip stok di kasir, detail produk), skrip impor, migrasi 002–004, tes SQL.
+**Selesai:** Pengguna & Hak Akses granular (migrasi 005 + halaman + Edge Function; SQL lolos tes lokal, UI/Edge Function belum diuji di Supabase), login, layout/tema, kasir (scan barcode, diskon per produk, bayar, struk), produk & harga (daftar, tambah/ubah, detail card, harga beli rahasia), stok per cabang (halaman Stok & Pengadaan, strip stok di kasir, detail produk), skrip impor, migrasi 002–004, tes SQL, tutup transaksi harian (migrasi 018 + `/tutup-kasir`; UI belum diuji di Supabase).
 **Belum dibuat (urutan yang disarankan):**
 1. (Pemilik) hitung fisik tiap cabang → impor lewat aplikasi → uji kasir dengan stok nyata. Fitur impor/mutasi/total sudah ada; sisanya pekerjaan data, bukan kode.
-2. Tutup kasir: rekap harian per kasir/kabag (Rekap Penjualan bulanan, void, ekspor Excel & Keuangan bulanan SUDAH ada).
+2. ~~Tutup kasir~~ **SUDAH dibuat** (migrasi 018 + halaman `/tutup-kasir`). Rekap harian per kasir (bukan per cabang) belum dipisah: satu penutupan mencakup seluruh transaksi cabang pada tanggal itu.
 3. Perbaikan data harga beli (lihat bagian Keuangan): isi `lastCost`/Price1 yang benar agar estimasi laba akurat.
 4. Halaman Cabang (tambah/nonaktifkan; saat ini cabang baru lewat SQL). Pengguna & Role SUDAH dibuat (lihat Status selesai) tetapi perlu diuji di Supabase sungguhan, termasuk Edge Function.
 5. Purchase Order (fitur `purchasing` ada, tabel/halaman belum) dan halaman Member (tabel `members` ada; kasir saat ini hanya mengetik nomor/nama).
@@ -227,6 +229,13 @@ Pemilik pindah ke agen lain karena kredit Claude gratis habis. Hal yang perlu di
 - **Menu yang tak muat disembunyikan (bukan digulir)**; tombol **burger** di header sidebar membuka daftar SEMUA menu (terlihat + tersembunyi), lencana = jumlah yang tersembunyi; Escape/klik di luar/memilih menu menutupnya. Layar pendek tanpa ruang kartu: kartu & pegangan hilang, menu mengisi ruang (≥2 terlihat).
 - Hitungan: `computeSidebarLayout` (murni, `tests/sidebar-layout.mjs`: 18 skenario) memakai tinggi border-box sidebar/logo/kartu pengguna (`useElementHeight('border')`); konstanta dalam rem (tombol menu 2,75rem, padding nav 1,5rem, pegangan 0,75rem). Pembungkus kartu `box-border pb-2`, jadi minimum pembungkus = 7rem isi + 0,5rem.
 - Tes browser (`tests/ui-smoke.mjs`, 36 pemeriksaan): tarik naik/turun, tepat 2 menu, lencana, burger (semua menu, Escape, pindah halaman), simpan setelah muat ulang, klik ganda, papan ketik, layar pendek.
+
+## Tutup transaksi harian (`/tutup-kasir`, fitur `daily_close`, migrasi 018)
+- Satu penutupan per **(cabang, tanggal)** di tabel `daily_closings`, menyimpan **snapshot**: jumlah transaksi, kotor, diskon, total, void, rincian per metode bayar, `cash_expected` (tunai seharusnya di laci), `cash_counted` (hasil hitung), `cash_difference` (dihitung DB), catatan, siapa & kapan menutup.
+- RPC `daily_close_summary(p_branch, p_date)` (hak `daily_close` r **atau** c) menampilkan ringkasan hari + status penutupan; RPC `close_day(p_branch, p_date, p_cash_counted, p_note)` (hak `daily_close` c) menghitung ULANG semua angka dari `sales` di server (klien tidak mengirim total), mengunci `pg_advisory_xact_lock` per cabang+tanggal, menolak tutup ganda, tanggal yang belum terjadi, dan hari tanpa transaksi, lalu mencatat `audit_log` aksi `daily.close`.
+- `p_branch` null = cabang milik user; role lintas cabang mengirim cabang aktif. RLS baca: `has_perm('daily_close', ...) and can_see_branch`; **tidak ada policy tulis** (hanya RPC). Tabel ikut `scripts/lib/backup-core.mjs`.
+- Halaman: pilih tanggal (bawaan hari ini WIB) + cabang (role lintas cabang), kartu ringkasan, tabel per metode, isian uang tunai + catatan, konfirmasi lewat modal, riwayat 30 penutupan terakhir. Bila ada transaksi/void **setelah** hari ditutup, halaman memberi peringatan `changed_after_close`; snapshot tidak berubah dan hari **tidak bisa dibuka ulang**.
+- Tes: bagian TUTUP di `npm run test:sql` (angka = tabel sales, tutup ganda, cabang lain, hak, baca/tulis tabel, audit) dan `npm run test:e2e` (ringkasan = Rekap hari itu, snapshot & selisih, RLS).
 
 ## Sesi 9 Nov 2026 — audit keamanan + idempotensi bayar (belum di-commit)
 **Audit awal:** `npm run build` EXIT=0, 12 skrip tes lulus. Temuan diperbaiki hari itu:
