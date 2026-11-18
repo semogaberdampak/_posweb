@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { LogOut, Menu, Store, X, type LucideIcon } from 'lucide-react'
+import { ArrowDown, ArrowUp, GripVertical, LogOut, Menu, Store, X, type LucideIcon } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { useElementHeight } from '../../shared/hooks'
 import { TopProducts } from './TopProducts'
@@ -15,13 +15,19 @@ const remPx = () => parseFloat(getComputedStyle(document.documentElement).fontSi
 const linkCls = ({ isActive }: { isActive: boolean }) => `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${isActive ? 'bg-primary text-on-primary shadow-md shadow-primary/20' : 'text-text-muted hover:bg-highlight/25'}`
 
 /** Sidebar: menu (yang tidak muat disembunyikan → tombol burger), pegangan tarik, kartu Produk Terlaris yang tingginya bisa diatur. */
-export function Sidebar({ items, showTop, branchId, branchLabel }: { items: NavItem[]; showTop: boolean; branchId: string | null; branchLabel: string }) {
+export function Sidebar({ items, showTop, branchId, branchLabel, canReorder, onReorder }: {
+  items: NavItem[]; showTop: boolean; branchId: string | null; branchLabel: string
+  canReorder?: boolean; onReorder?: (paths: string[]) => Promise<void>
+}) {
   const { profile, signOut } = useAuth()
   const [asideRef, H] = useElementHeight<HTMLElement>('border')
   const [logoRef, L] = useElementHeight<HTMLDivElement>('border')
   const [userRef, U] = useElementHeight<HTMLDivElement>('border')
   const [topRem, setTopRem] = useState<number | null>(readH)
   const [open, setOpen] = useState(false)
+  const [reorder, setReorder] = useState(false)
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
+  const [orderErr, setOrderErr] = useState('')
   const burgerRef = useRef<HTMLButtonElement>(null); const panelRef = useRef<HTMLDivElement>(null)
   const loc = useLocation()
 
@@ -31,6 +37,17 @@ export function Sidebar({ items, showTop, branchId, branchLabel }: { items: NavI
   const curRem = lay.widgetH / rem
 
   useEffect(() => setOpen(false), [loc.pathname])
+  useEffect(() => { if (!open) { setReorder(false); setOrderErr('') } }, [open])
+
+  // ---- atur urutan menu (global): tarik kartu atau pindahkan dengan panah ----
+  const move = (from: number, to: number) => {
+    if (!onReorder || from < 0 || to < 0 || to >= items.length || from === to) return
+    const next = [...items]
+    const [it] = next.splice(from, 1)
+    next.splice(to, 0, it)
+    setOrderErr('')
+    void onReorder(next.map((x) => x.to)).catch((e) => setOrderErr(e instanceof Error ? e.message : 'Gagal menyimpan urutan menu.'))
+  }
   useEffect(() => {
     if (!open) return
     const out = (e: PointerEvent) => { const t = e.target as Node; if (!panelRef.current?.contains(t) && !burgerRef.current?.contains(t)) setOpen(false) }
@@ -67,13 +84,46 @@ export function Sidebar({ items, showTop, branchId, branchLabel }: { items: NavI
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           {hidden > 0 && <span aria-label={`${hidden} menu tersembunyi`} className="absolute -right-1 -top-1 min-w-4 rounded-full bg-primary px-1 text-center text-[0.65rem] font-bold leading-4 text-on-primary">{hidden}</span>}
         </button>
-        {open && (
+        {open && (reorder && canReorder ? (
+          <div ref={panelRef} role="dialog" aria-label="Atur urutan menu" className="absolute left-2 right-2 top-full z-30 mt-1 rounded-2xl border border-border-muted bg-bg-light p-2 shadow-xl">
+            <div className="flex items-center justify-between gap-2 px-1 pb-1.5">
+              <span className="text-xs font-semibold text-text-muted">Atur urutan menu</span>
+              <button type="button" className="btn-ghost !px-2 !py-1 text-xs" onClick={() => setReorder(false)}>Selesai</button>
+            </div>
+            <ul className="max-h-[60vh] space-y-1 overflow-y-auto">
+              {items.map(({ to, label, icon: Icon }, i) => (
+                <li key={to} draggable
+                  onDragStart={() => setDragIdx(i)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); if (dragIdx !== null) move(dragIdx, i); setDragIdx(null) }}
+                  onDragEnd={() => setDragIdx(null)}
+                  className={`flex cursor-grab items-center gap-1.5 rounded-xl border border-border-muted bg-bg-dark px-2 py-1.5 text-xs active:cursor-grabbing ${dragIdx === i ? 'opacity-40' : ''}`}>
+                  <GripVertical className="h-4 w-4 shrink-0 text-text-muted" />
+                  <Icon className="h-4 w-4 shrink-0 text-text-muted" />
+                  <span className="min-w-0 flex-1 truncate">{label}</span>
+                  <button type="button" aria-label={`Naikkan ${label}`} disabled={i === 0} onClick={() => move(i, i - 1)}
+                    className="rounded-lg p-1 text-text-muted transition hover:bg-highlight/25 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
+                  <button type="button" aria-label={`Turunkan ${label}`} disabled={i === items.length - 1} onClick={() => move(i, i + 1)}
+                    className="rounded-lg p-1 text-text-muted transition hover:bg-highlight/25 disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
+                </li>
+              ))}
+            </ul>
+            {orderErr && <p role="alert" className="px-1 pt-2 text-xs text-danger">{orderErr}</p>}
+            <p className="px-1 pt-2 text-[11px] leading-snug text-text-muted">Tarik kartu atau pakai panah. Urutan berlaku untuk semua pengguna dan tersimpan otomatis.</p>
+          </div>
+        ) : (
           <div ref={panelRef} role="menu" aria-label="Semua menu" className="absolute left-2 right-2 top-full z-30 mt-1 max-h-[70vh] space-y-1 overflow-y-auto rounded-2xl border border-border-muted bg-bg-light p-2 shadow-xl">
             {items.map(({ to, label, icon: Icon }) => (
               <NavLink key={to} to={to} role="menuitem" className={linkCls} onClick={() => setOpen(false)}><Icon className="h-4 w-4 shrink-0" /><span className="truncate">{label}</span></NavLink>
             ))}
+            {canReorder && (
+              <button type="button" onClick={() => setReorder(true)}
+                className="mt-1 flex w-full items-center gap-2 border-t border-border-muted px-3.5 pb-1 pt-2.5 text-sm font-medium text-text-muted transition hover:text-primary">
+                <GripVertical className="h-4 w-4 shrink-0" />Atur urutan menu
+              </button>
+            )}
           </div>
-        )}
+        ))}
       </div>
 
       <nav aria-label="Menu utama" className="shrink-0 space-y-1 overflow-hidden p-3" style={{ height: H ? lay.navH : undefined }}>

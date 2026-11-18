@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Upload } from 'lucide-react'
-import { deleteMember, draftOf, listMembers, saveMember, type Member } from './api'
+import { deleteMember, draftOf, listMemberStats, listMembers, saveMember, type Member } from './api'
 import { MemberForm } from './MemberForm'
 import { ExtendMemberModal } from './ExtendMemberModal'
 import { ActiveCountdown } from './ActiveCountdown'
@@ -25,8 +25,12 @@ export default function MembersPage() {
   const { data = [], isFetching, isError } = useQuery({
     queryKey: ['members', dq, onlyActive], queryFn: () => listMembers(dq, onlyActive), placeholderData: keepPreviousData,
   })
+  const { data: stats } = useQuery({ queryKey: ['member-stats'], queryFn: listMemberStats })
 
-  const refresh = () => void qc.invalidateQueries({ queryKey: ['members'] })
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ['members'] })
+    void qc.invalidateQueries({ queryKey: ['member-stats'] })
+  }
 
   const toggle = useMutation({
     mutationFn: (m: Member) => saveMember({ ...draftOf(m), is_active: !m.is_active }),
@@ -56,6 +60,21 @@ export default function MembersPage() {
 
       {msg && <p role="alert" className="rounded-2xl bg-danger/20 px-4 py-2 text-sm text-danger">{msg}</p>}
       {isError && <p role="alert" className="rounded-2xl bg-danger/20 px-4 py-2 text-sm text-danger">Gagal memuat data member.</p>}
+
+      <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-3 rounded-2xl border border-border-muted bg-bg-light px-4 py-2">
+          <span className="text-xs uppercase tracking-wide text-text-muted">Total member</span>
+          <b className="text-lg">{stats ? stats.total.toLocaleString('id-ID') : '—'}</b>
+        </div>
+        <div className="flex items-center gap-3 rounded-2xl border border-success/30 bg-success/10 px-4 py-2">
+          <span className="text-xs uppercase tracking-wide text-text-muted">Aktif</span>
+          <b className="text-lg text-success">{stats ? stats.active.toLocaleString('id-ID') : '—'}</b>
+        </div>
+        <div className="flex items-center gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-2">
+          <span className="text-xs uppercase tracking-wide text-text-muted">Nonaktif</span>
+          <b className="text-lg text-warning">{stats ? stats.inactive.toLocaleString('id-ID') : '—'}</b>
+        </div>
+      </div>
 
       <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-border-muted bg-bg-light">
         <table className="w-full text-sm">

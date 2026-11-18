@@ -33,3 +33,15 @@ export function computeSidebarLayout(i: SidebarInput): SidebarLayout {
   return { navH, visible, widgetH: W, maxWidgetH: maxW, minWidgetH: wMin, hasHandle: W > 0 }
 }
 export const clampRem = (rem: number, bounds: { minRem: number; maxRem: number }) => Math.min(Math.max(rem, bounds.minRem), bounds.maxRem)
+
+/**
+ * Terapkan urutan menu yang disimpan superadmin. Menu yang tidak tercantum di urutan (baru / belum
+ * pernah disimpan) ditaruh di belakang dengan urutan bawaan. Urutan tidak pernah menghilangkan menu.
+ */
+export function orderNav<T extends { to: string }>(items: T[], order: string[]): T[] {
+  const rank = new Map(order.map((to, i) => [to, i]))
+  return items
+    .map((item, i) => ({ item, key: rank.has(item.to) ? (rank.get(item.to) as number) : order.length + i }))
+    .sort((a, b) => a.key - b.key)
+    .map((x) => x.item)
+}

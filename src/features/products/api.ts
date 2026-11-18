@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabase'
 import { cleanSearch } from '../../shared/search'
+import type { ProductRowIn } from './csv'
 
 export type Attr = { k: string; v: unknown }
 export type ProductRow = {
@@ -42,6 +43,15 @@ function mapError(code?: string) {
   if (code === '23514') return 'Produk aktif harus berharga lebih dari 0.'
   if (code === '42501') return 'Anda tidak punya izin untuk tindakan ini.'
   return 'Gagal menyimpan. Coba lagi.'
+}
+
+export type ProductImportResult = { inserted: number; updated: number; skipped: number; invalid: number; invalid_sample: string[] }
+
+/** Impor CSV produk (lewat RPC). Overwrite = perbarui kolom yang ada di file untuk kode yang sudah terdaftar. */
+export async function importProducts(rows: ProductRowIn[], overwrite: boolean): Promise<ProductImportResult> {
+  const { data, error } = await supabase.rpc('import_products', { p_rows: rows, p_overwrite: overwrite })
+  if (error) throw new Error(error.message === 'forbidden' ? 'Anda tidak punya izin mengimpor produk.' : 'Gagal mengimpor produk.')
+  return data as ProductImportResult
 }
 
 /** Harga beli: RLS hanya mengizinkan role dengan hak cost_prices; selain itu hasilnya kosong. */

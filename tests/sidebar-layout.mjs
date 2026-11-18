@@ -40,4 +40,11 @@ const r20 = S.computeSidebarLayout({ ...base, rem: 20, topRem: 15 }), r20i = 2.7
 t('skala huruf (rem=20px): kartu 15rem = 300px; tinggi menu per tombol ikut membesar (55px)', r20.widgetH === 300 && Math.abs(S.computeSidebarLayout({ ...base, rem: 20 }).navH - (1.5 * 20 + 9 * r20i)) < 0.01)
 t('menu sedikit (4) pada layar tinggi: kartu mengisi lebih banyak ruang daripada saat 9 menu', S.computeSidebarLayout({ ...base, n: 4 }).widgetH > S.computeSidebarLayout(base).widgetH)
 t('clampRem', S.clampRem(50, { minRem: 7, maxRem: 20 }) === 20 && S.clampRem(1, { minRem: 7, maxRem: 20 }) === 7 && S.clampRem(10, { minRem: 7, maxRem: 20 }) === 10)
+// ---------- urutan menu yang disimpan superadmin ----------
+const NAV = [{ to: '/pos' }, { to: '/produk' }, { to: '/stok' }, { to: '/membership' }]
+t('urutan tersimpan diterapkan, menu yang tak tercantum tetap di belakang', S.orderNav(NAV, ['/stok', '/pos']).map((x) => x.to).join(',') === '/stok,/pos,/produk,/membership')
+t('tanpa urutan tersimpan: urutan bawaan tidak berubah', S.orderNav(NAV, []).map((x) => x.to).join(',') === '/pos,/produk,/stok,/membership')
+t('menu baru di belakang; menu lama tidak pernah hilang', S.orderNav([...NAV, { to: '/keuangan' }], ['/membership', '/pos']).map((x) => x.to).join(',') === '/membership,/pos,/produk,/stok,/keuangan')
+t('urutan berisi menu yang tidak terlihat untuk user tidak mengganggu', S.orderNav(NAV.slice(0, 2), ['/keuangan', '/stok', '/produk']).map((x) => x.to).join(',') === '/produk,/pos')
+
 console.log(`\nHASIL: ${ok} lulus, ${bad} gagal`); process.exit(bad ? 1 : 0)

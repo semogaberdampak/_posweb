@@ -1,9 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { listBranches } from '../users/api'
 import { ArrowLeftRight, Boxes, ClipboardCheck, DollarSign, IdCard, Lock, Moon, Package, Settings, FileText, ShieldCheck, ShoppingCart, Sun, type LucideIcon } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { Sidebar } from './Sidebar'
+import { NotificationBell } from './NotificationBell'
+import { getNavOrder, saveNavOrder } from './api'
+import { orderNav } from './sidebarLayout'
 import { useTheme } from '../settings/theme'
 
 const NAV: { to: string; label: string; feature: string; icon: LucideIcon; adminOnly?: boolean }[] = [
@@ -31,13 +34,25 @@ export default function Layout() {
   const activeBranch = branches.find((b) => b.id === activeBranchId)
   const topBranchLabel = allBranches ? (activeBranch?.short_name ?? activeBranch?.name ?? branch) : branch
   const showTop = can('pos', 'r') || can('sales_recap', 'r')
+  const isSuperadmin = profile?.role_name === 'superadmin'
+
+  // Urutan menu = pengaturan GLOBAL yang disimpan superadmin; menu baru/tersembunyi tetap ikut di belakang.
+  const qc = useQueryClient()
+  const { data: navOrder = [] } = useQuery({ queryKey: ['nav-order'], queryFn: getNavOrder, staleTime: 5 * 60_000 })
+  const navItems = NAV.filter((n) => can(n.feature, 'r') && (!n.adminOnly || isSuperadmin)
+      // Tutup kasir hanya untuk role kasir: lainnya memakai kolom & pemberitahuan di Rekap Penjualan
+      && !(n.feature === 'daily_close' && !isKasir)).map(({ to, label, icon }) => ({ to, label, icon }))
+  const items = orderNav(navItems, navOrder)
+  async function reorder(paths: string[]) {
+    qc.setQueryData(['nav-order'], paths) // langsung pindah di layar; dikembalikan bila server menolak
+    try { await saveNavOrder(paths) }
+    catch (e) { await qc.invalidateQueries({ queryKey: ['nav-order'] }); throw e }
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar        items={NAV.filter((n) => can(n.feature, 'r') && (!n.adminOnly || profile?.role_name === 'superadmin')
-          // Tutup kasir hanya untuk role kasir: lainnya memakai kolom & pemberitahuan di Rekap Penjualan
-          && !(n.feature === 'daily_close' && !isKasir)).map(({ to, label, icon }) => ({ to, label, icon }))}
-        showTop={showTop} branchId={allBranches ? activeBranchId : null} branchLabel={topBranchLabel} />
+      <Sidebar items={items} showTop={showTop} branchId={allBranches ? activeBranchId : null} branchLabel={topBranchLabel}
+        canReorder={isSuperadmin} onReorder={reorder} />
 
       <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
         <header className="z-10 flex items-center justify-between border-b border-border-muted bg-bg-light px-6 py-3.5 print:hidden">
@@ -57,6 +72,7 @@ export default function Layout() {
                 <Lock className="h-4 w-4" /> Tutup Kasir
               </NavLink>
             )}
+            <NotificationBell canWrite={isSuperadmin} />
             <button onClick={toggle} title="Ganti mode gelap/terang"
               className="rounded-xl bg-bg-dark p-2.5 text-text-muted transition hover:bg-highlight/25">
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

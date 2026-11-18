@@ -42,6 +42,17 @@ export async function listMembers(q: string, onlyActive: boolean): Promise<Membe
   return (data ?? []) as Member[]
 }
 
+/** Jumlah member aktif & nonaktif (seluruh tabel, bukan hanya 200 baris yang tampil). */
+export type MemberStats = { total: number; active: number; inactive: number }
+export async function listMemberStats(): Promise<MemberStats> {
+  const count = (active: boolean) => supabase.from('members')
+    .select('id', { count: 'exact', head: true }).eq('is_active', active)
+  const [a, i] = await Promise.all([count(true), count(false)])
+  if (a.error || i.error) throw new Error('Gagal menghitung jumlah member.')
+  const active = a.count ?? 0, inactive = i.count ?? 0
+  return { total: active + inactive, active, inactive }
+}
+
 /** Cari member untuk kasir (nomor ID diawali / nama mengandung). RPC membatasi hasil 20 baris. */
 export async function findMember(q: string): Promise<MemberLookup[]> {
   const s = q.trim().slice(0, 60)

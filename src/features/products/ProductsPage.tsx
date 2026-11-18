@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
+import { Plus, Upload } from 'lucide-react'
 import { listProducts, type ProductRow, type StatusFilter } from './api'
 import { ProductDetail } from './ProductDetail'
 import { ProductForm } from './ProductForm'
+import { ImportProductsModal } from './ImportProductsModal'
 import { useAuth } from '../auth/AuthProvider'
 import { rupiah } from '../../shared/format'
 import { useDebounced } from '../../shared/hooks'
@@ -17,6 +18,7 @@ export default function ProductsPage() {
   const [cursor, setCursor] = useState(0)
   const [detail, setDetail] = useState<ProductRow | null>(null)
   const [form, setForm] = useState<{ product: ProductRow | null } | null>(null)
+  const [importing, setImporting] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
 
   const { data, isError, isFetching } = useQuery({
@@ -53,7 +55,10 @@ export default function ProductsPage() {
           <option value="active">Aktif</option><option value="inactive">Nonaktif</option><option value="all">Semua</option>
         </select>
         {can('products', 'c') && (
-          <button className="btn-primary ml-auto flex items-center gap-1" onClick={() => setForm({ product: null })}><Plus className="h-4 w-4" />Tambah produk</button>
+          <button className="btn-ghost ml-auto flex items-center gap-1" onClick={() => setImporting(true)}><Upload className="h-4 w-4" />Impor CSV</button>
+        )}
+        {can('products', 'c') && (
+          <button className="btn-primary flex items-center gap-1" onClick={() => setForm({ product: null })}><Plus className="h-4 w-4" />Tambah produk</button>
         )}
       </div>
 
@@ -92,6 +97,7 @@ export default function ProductsPage() {
       {detail && <ProductDetail p={detail} canEdit={can('products', 'u')} onClose={() => setDetail(null)}
         onEdit={() => { setForm({ product: detail }); setDetail(null) }} />}
       {form && <ProductForm product={form.product} onClose={() => setForm(null)} />}
+      {importing && <ImportProductsModal canOverwrite={can('products', 'u')} onClose={() => setImporting(false)} />}
     </div>
   )
 }

@@ -262,6 +262,44 @@ console.log('MEMBER: kasir tidak bisa ubah masa aktif    :', await call(1, `sele
 console.log('MEMBER: member_save menyimpan masa aktif     :', await call(5, `select member_save(null,'M-106','Test Aktif',true,'{\"masa_mulai\":\"2026-06-01\",\"masa_sampai\":\"2027-05-31\"}'::jsonb)`))
 console.log('MEMBER: find_member mengembalikan active_until:', (await findm(1, 'M-106')).includes('2027-05-31'))
 
+// ===== uji 023: impor CSV produk =====
+await run('023', sql('supabase/manual_migrations/023_import_products.sql'))
+await run('023 ulang (idempoten)', sql('supabase/manual_migrations/023_import_products.sql'))
+const impP = async (n, rows, ow) => { try { return JSON.stringify((await as(n, `select import_products('${JSON.stringify(rows).replace(/'/g, "''")}'::jsonb, ${ow}) as r`))[0].r) } catch (e) { return 'ERR: ' + e.message } }
+console.log('PRODUK-IMPOR: tambah 2 produk (harga 0 otomatis nonaktif):', await impP(5, [{ code: 'C1', name: 'Buku C', price: 15000, author: 'Y', is_active: true }, { code: 'C2', name: 'Buku D', price: 0 }], false))
+console.log('PRODUK-IMPOR: produk tersimpan                        :', JSON.stringify(await q(`select code, name, price, author, is_active from products where code in ('C1','C2') order by code`)))
+console.log('PRODUK-IMPOR: kode ada tanpa timpa dilewati           :', await impP(5, [{ code: 'C1', name: 'Nama Baru', price: 99000 }], false), '| harga:', (await q(`select price from products where code='C1'`))[0].price)
+console.log('PRODUK-IMPOR: dengan timpa memperbarui harga/nama     :', await impP(5, [{ code: 'c1', name: 'Nama Baru', price: 99000, is_active: true }], true), '| baris:', JSON.stringify(await q(`select name, price from products where code='C1'`)))
+console.log('PRODUK-IMPOR: harga rusak / aktif harga 0 ditolak     :', await impP(5, [{ code: 'C3', name: 'Salah Harga', price: 'abc' }, { code: 'C4', name: 'Aktif Nol', price: 0, is_active: true }], false))
+console.log('PRODUK-IMPOR: baris tanpa harga (produk baru) ditolak :', await impP(5, [{ code: 'C5', name: 'Tanpa Harga' }], false))
+console.log('PRODUK-IMPOR: kasir tidak boleh mengimpor             :', await impP(1, [{ code: 'C6', name: 'Kasir', price: 1000 }], false))
+console.log('PRODUK-IMPOR: tercatat di audit log                   :', (await q(`select count(*)::int n from audit_log where action='product.import'`))[0].n >= 1)
+
+// ===== uji 024: urutan menu global =====
+await run('024', sql('supabase/manual_migrations/024_app_settings_nav_order.sql'))
+await run('024 ulang (idempoten)', sql('supabase/manual_migrations/024_app_settings_nav_order.sql'))
+const navSave = async (n, arr) => { try { await as(n, `select save_nav_order('${JSON.stringify(arr).replace(/'/g, "''")}'::jsonb)`); return 'OK' } catch (e) { return 'ERR: ' + e.message } }
+console.log('MENU: superadmin menyimpan urutan                     :', await navSave(5, ['/produk', '/pos']), '| tersimpan:', JSON.stringify((await q(`select value from app_settings where key='nav_order'`))[0]?.value))
+console.log('MENU: kasir boleh membaca urutan                      :', JSON.stringify(await as(1, `select value from app_settings where key='nav_order'`)))
+console.log('MENU: kasir tidak boleh mengubah urutan               :', await navSave(1, ['/pos']))
+console.log('MENU: alamat bukan path ditolak                       :', await navSave(5, ['pos']))
+console.log('MENU: alamat ganda ditolak                            :', await navSave(5, ['/pos', '/pos']))
+console.log('MENU: perubahan tercatat di audit log                 :', (await q(`select count(*)::int n from audit_log where action='settings.nav_order'`))[0].n >= 1)
+
+// ===== uji 025: pemberitahuan sistem =====
+await run('025', sql('supabase/manual_migrations/025_notifications.sql'))
+await run('025 ulang (idempoten)', sql('supabase/manual_migrations/025_notifications.sql'))
+const notifSave = async (n, title, body = '') => { try { return (await as(n, `select notification_save('${title.replace(/'/g, "''")}', '${body.replace(/'/g, "''")}') as id`))[0].id } catch (e) { return 'ERR: ' + e.message } }
+const notifDel = async (n, id) => { try { await as(n, `select notification_delete('${id}')`); return 'OK' } catch (e) { return 'ERR: ' + e.message } }
+const nid = await notifSave(5, 'Pemeliharaan sistem', 'Server akan dijeda pukul 22.00 WIB.')
+console.log('NOTIF: superadmin menulis pemberitahuan               :', typeof nid === 'string' && nid.length === 36, '| penulis:', (await q(`select created_by_name from notifications`))[0]?.created_by_name)
+console.log('NOTIF: semua user (kasir) boleh membaca               :', (await as(1, 'select title, body from notifications')).length === 1)
+console.log('NOTIF: kasir tidak boleh menulis                      :', await notifSave(1, 'Dari kasir'))
+console.log('NOTIF: judul kosong ditolak                           :', await notifSave(5, '   '))
+console.log('NOTIF: kasir tidak boleh menghapus                    :', await notifDel(1, nid))
+console.log('NOTIF: superadmin menghapus                           :', await notifDel(5, nid), '| sisa:', (await q(`select count(*)::int n from notifications`))[0].n)
+console.log('NOTIF: tercatat di audit log                          :', (await q(`select count(*)::int n from audit_log where action like 'notification.%'`))[0].n >= 2)
+
 // status migrasi (dipakai juga untuk panduan pemilik)
 console.log('STATUS:', JSON.stringify(await q(`
  select '002' as migrasi, exists(select 1 from information_schema.columns where table_name='products' and column_name='author') as sudah
@@ -276,4 +314,7 @@ console.log('STATUS:', JSON.stringify(await q(`
  union all select '019', to_regprocedure('public.closing_status(date,date,uuid)') is not null
  union all select '020', to_regprocedure('public._is_kasir(uuid)') is not null
  union all select '021', to_regprocedure('public.member_save(uuid,text,text,boolean,jsonb)') is not null
- union all select '022', to_regprocedure('public.member_set_active_period(uuid,date,date)') is not null`)))
+ union all select '022', to_regprocedure('public.member_set_active_period(uuid,date,date)') is not null
+ union all select '023', to_regprocedure('public.import_products(jsonb,boolean)') is not null
+ union all select '024', to_regprocedure('public.save_nav_order(jsonb)') is not null
+ union all select '025', to_regprocedure('public.notification_save(text,text)') is not null`)))
