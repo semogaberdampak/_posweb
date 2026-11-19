@@ -15,6 +15,7 @@
     "test:csv": "node tests/stock-csv.mjs",
     "test:member": "node tests/member-csv.mjs",
     "test:product-csv": "node tests/product-csv.mjs",
+    "test:kbs-csv": "node tests/kbs-csv.mjs",
     "test:print": "node tests/print-render.mjs",
     "backup": "node scripts/backup.mjs",
     "backup:verify": "node scripts/backup.mjs --verify",

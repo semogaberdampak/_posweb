@@ -6,6 +6,7 @@ import { MemberForm } from './MemberForm'
 import { ExtendMemberModal } from './ExtendMemberModal'
 import { ActiveCountdown } from './ActiveCountdown'
 import { ImportMembersModal } from './ImportMembersModal'
+import { MemberDetailModal } from './MemberDetailModal'
 import { useAuth } from '../auth/AuthProvider'
 import { useDebounced } from '../../shared/hooks'
 import { rupiah } from '../../shared/format'
@@ -17,6 +18,7 @@ export default function MembersPage() {
   const dq = useDebounced(q, 250)
   const [onlyActive, setOnlyActive] = useState(false)
   const [form, setForm] = useState<{ member: Member | null } | null>(null)
+  const [detail, setDetail] = useState<Member | null>(null)
   const [extend, setExtend] = useState<Member | null>(null)
   const [importing, setImporting] = useState(false)
   const [msg, setMsg] = useState('')
@@ -94,7 +96,8 @@ export default function MembersPage() {
           </thead>
           <tbody>
             {data.map((m) => (
-              <tr key={m.id} className="border-t border-border-muted hover:bg-highlight/25">
+              <tr key={m.id} title="Klik dua kali untuk melihat data lengkap" onDoubleClick={() => setDetail(m)}
+                className="cursor-pointer border-t border-border-muted hover:bg-highlight/25">
                 <td className="whitespace-nowrap px-3 py-2 font-mono">{m.member_no}</td>
                 <td className="px-3 py-2">{m.name}</td>
                 <td className="max-w-[16rem] truncate px-3 py-2 text-text-muted" title={m.institution ?? ''}>{m.institution ?? '—'}</td>
@@ -114,7 +117,7 @@ export default function MembersPage() {
                   {m.active_until && <div className="text-xs text-text-muted">s/d {m.active_until}</div>}
                 </td>
                 {showActions && (
-                  <td className="whitespace-nowrap px-3 py-2 text-right">
+                  <td className="whitespace-nowrap px-3 py-2 text-right" onDoubleClick={(e) => e.stopPropagation()}>
                     {can('members', 'u') && <button className="btn-ghost !px-3 !py-1" onClick={() => setForm({ member: m })}>Ubah</button>}
                     {can('members', 'u') && <button className="btn-ghost !px-3 !py-1" onClick={() => setExtend(m)}>Perpanjang</button>}
                     {can('members', 'u') && <button className="btn-ghost !px-3 !py-1" disabled={toggle.isPending} onClick={() => toggle.mutate(m)}>{m.is_active ? 'Nonaktifkan' : 'Aktifkan'}</button>}
@@ -132,10 +135,12 @@ export default function MembersPage() {
         </table>
       </div>
       <p className="text-xs text-text-muted">
-        Menampilkan maksimal 200 member; persempit dengan kata kunci. Nomor ID disimpan kapital dan harus unik.
+        Menampilkan maksimal 200 member; persempit dengan kata kunci. Klik dua kali pada baris untuk melihat data lengkap. Nomor ID disimpan kapital dan harus unik.
         {can('members', 'c') && ' Impor CSV: kolom Cust ID, Nama, Lembaga, Alamat, Kota, Propinsi, Telp., Sellular, Segment, Segment Detail, Balance.'}
       </p>
 
+      {detail && <MemberDetailModal member={detail} canEdit={can('members', 'u')}
+        onEdit={() => { setForm({ member: detail }); setDetail(null) }} onClose={() => setDetail(null)} />}
       {form && <MemberForm member={form.member} onClose={() => setForm(null)} onSaved={refresh} />}
       {extend && <ExtendMemberModal member={extend} onClose={() => setExtend(null)} onSaved={refresh} />}
       {importing && <ImportMembersModal canOverwrite={can('members', 'u')} onClose={() => setImporting(false)} />}

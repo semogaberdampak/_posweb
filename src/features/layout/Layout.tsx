@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { listBranches } from '../users/api'
-import { ArrowLeftRight, Boxes, ClipboardCheck, DollarSign, IdCard, Lock, Moon, Package, Settings, FileText, ShieldCheck, ShoppingCart, Sun, type LucideIcon } from 'lucide-react'
+import { ArrowLeftRight, Boxes, ClipboardCheck, DollarSign, IdCard, Lock, Moon, Package, Settings, FileText, ShieldCheck, ShoppingCart, Store, Sun, type LucideIcon } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { Sidebar } from './Sidebar'
 import { NotificationBell } from './NotificationBell'
@@ -14,6 +14,7 @@ const NAV: { to: string; label: string; feature: string; icon: LucideIcon }[] = 
   { to: '/produk', label: 'Informasi Produk', feature: 'products', icon: Package },
   { to: '/stok', label: 'Stok & Pengadaan', feature: 'stock', icon: Boxes },
   { to: '/membership', label: 'Membership', feature: 'members', icon: IdCard },
+  { to: '/member-kbs', label: 'Member KBS', feature: 'member_kbs', icon: Store },
   { to: '/mutasi-stok', label: 'Mutasi Stok', feature: 'stock_move', icon: ArrowLeftRight },
   { to: '/laporan', label: 'Rekap Penjualan', feature: 'sales_recap', icon: ClipboardCheck },
   { to: '/tutup-kasir', label: 'Tutup Kasir', feature: 'daily_close', icon: Lock },

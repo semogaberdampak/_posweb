@@ -326,6 +326,8 @@ await run('027', sql('supabase/manual_migrations/027_store_member_kbs.sql'))
 await run('027 ulang (idempoten)', sql('supabase/manual_migrations/027_store_member_kbs.sql'))
 await run('028', sql('supabase/manual_migrations/028_kbs_receipt_name_only.sql'))
 await run('028 ulang (idempoten)', sql('supabase/manual_migrations/028_kbs_receipt_name_only.sql'))
+await run('029', sql('supabase/manual_migrations/029_member_kbs_page.sql'))
+await run('029 ulang (idempoten)', sql('supabase/manual_migrations/029_member_kbs_page.sql'))
 const kbsImport = async (n, rows) => {
   const j = `'${JSON.stringify(rows).replace(/'/g, "''")}'::jsonb`
   try { return JSON.stringify((await as(n, `select import_kbs_members(${j}) as r`))[0].r) } catch (e) { return 'ERR: ' + e.message }
@@ -357,6 +359,28 @@ await smSave(1, false, null, pusatId)
 console.log('MEMBER TOKO: dimatikan -> transaksi tanpa member  :', (await smSale([{ product_id: A, qty: 1, discount_pct: 0 }], null)).member)
 console.log('MEMBER TOKO: tercatat di audit log                :', (await q(`select count(*)::int n from audit_log where action in ('kbs_member.import','settings.store_member')`))[0].n >= 3)
 
+// ===== uji 029: halaman Member KBS =====
+const kbsList = async (n, query = '', active = false) => {
+  try { return (await as(n, `select kbs_member_list('${query}', ${active}, 200, 0) as r`))[0].r } catch (e) { return 'ERR: ' + e.message }
+}
+const kbsSave = async (n, id, code, name, active = true) => {
+  try { return (await as(n, `select kbs_member_save(${id ? `'${id}'` : 'null'}, '${code}', '${name}', ${active}) as r`))[0].r } catch (e) { return 'ERR: ' + e.message }
+}
+console.log('MEMBER KBS: fitur member_kbs tersedia                :', (await q(`select 1 from features where key='member_kbs'`)).length === 1)
+console.log('MEMBER KBS: superadmin punya hak penuh               :', (await as(5, `select has_perm('member_kbs','c') and has_perm('member_kbs','r') and has_perm('member_kbs','u') and has_perm('member_kbs','d') as p`))[0].p)
+console.log('MEMBER KBS: kasir tidak boleh membuka daftar         :', await kbsList(1))
+const kbsPage = await kbsList(5)
+console.log('MEMBER KBS: daftar + jumlah seluruh tabel            :', kbsPage.matched === 2 && kbsPage.total === 2 && kbsPage.active === 2 && kbsPage.rows.length === 2, JSON.stringify(kbsPage))
+console.log('MEMBER KBS: pencarian nama (bukan hanya kode)        :', JSON.stringify(await kbsList(5, 'cabang')))
+const k3 = await kbsSave(5, null, 'k3', 'Toko Baru KBS')
+console.log('MEMBER KBS: superadmin menambah (kode kapital)       :', typeof k3 === 'string' && !k3.startsWith('ERR') && (await q(`select code from kbs_members where id='${k3}'`))[0]?.code === 'K3')
+console.log('MEMBER KBS: mengubah nama                            :', (await kbsSave(5, k3, 'K3', 'Toko Baru Diubah')) === k3 && (await q(`select name from kbs_members where id='${k3}'`))[0]?.name === 'Toko Baru Diubah')
+console.log('MEMBER KBS: kode ganda ditolak                       :', (await kbsSave(5, null, 'K1', 'Bentrok')).slice?.(0, 40))
+console.log('MEMBER KBS: hapus toko yang tidak dipakai            :', await (async () => { try { await as(5, `select kbs_member_delete('${k3}')`); return (await q(`select count(*)::int n from kbs_members where id='${k3}'`))[0].n === 0 } catch { return false } })())
+const k2id = (await q(`select id from kbs_members where code='K2'`))[0].id
+console.log('MEMBER KBS: toko yang dipakai cabang tidak dihapus   :', await (async () => { try { await as(5, `select kbs_member_delete('${k2id}')`); return 'BISA DIHAPUS' } catch (e) { return 'ERR: ' + e.message } })())
+console.log('MEMBER KBS: tercatat di audit log                    :', (await q(`select count(*)::int n from audit_log where action in ('kbs_member.save','kbs_member.delete')`))[0].n >= 3)
+
 // status migrasi (dipakai juga untuk panduan pemilik)
 console.log('STATUS:', JSON.stringify(await q(`
  select '002' as migrasi, exists(select 1 from information_schema.columns where table_name='products' and column_name='author') as sudah
@@ -377,4 +401,5 @@ console.log('STATUS:', JSON.stringify(await q(`
  union all select '025', to_regprocedure('public.notification_save(text,text)') is not null
  union all select '026', exists(select 1 from information_schema.columns where table_name='print_templates' and column_name='branch_id')
  union all select '027', to_regprocedure('public.store_member_save(uuid,boolean,text)') is not null
- union all select '028', pg_get_functiondef(to_regprocedure('public.create_sale(jsonb,text,payment_method,numeric,uuid,uuid)')::oid) like '%v_member_label := v_sm_name;%'`)))
+ union all select '028', pg_get_functiondef(to_regprocedure('public.create_sale(jsonb,text,payment_method,numeric,uuid,uuid)')::oid) like '%v_member_label := v_sm_name;%'
+ union all select '029', exists(select 1 from features where key='member_kbs')`)))
