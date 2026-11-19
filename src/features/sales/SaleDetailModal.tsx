@@ -23,7 +23,8 @@ export function SaleDetailModal({ id, onClose }: { id: string; onClose: () => vo
   const qc = useQueryClient()
   const { can } = useAuth()
   const { data: d, error, isLoading } = useQuery({ queryKey: ['sale-detail', id], queryFn: () => fetchSaleDetail(id) })
-  const receipt = useReceiptCfg(), invoice = useInvoiceCfg()
+  // cetak ulang memakai format cabang tempat transaksi itu terjadi
+  const receipt = useReceiptCfg(d?.branch_id), invoice = useInvoiceCfg(d?.branch_id)
   const [kind, setKind] = useState<'receipt' | 'invoice'>('receipt')
   const { thermalOnly, usbDirect } = usePrintPrefs()
   const alive = useRef(true)

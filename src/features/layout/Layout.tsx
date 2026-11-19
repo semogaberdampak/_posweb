@@ -9,7 +9,7 @@ import { getNavOrder, saveNavOrder } from './api'
 import { orderNav } from './sidebarLayout'
 import { useTheme } from '../settings/theme'
 
-const NAV: { to: string; label: string; feature: string; icon: LucideIcon; adminOnly?: boolean }[] = [
+const NAV: { to: string; label: string; feature: string; icon: LucideIcon }[] = [
   { to: '/pos', label: 'Kasir Penjualan', feature: 'pos', icon: ShoppingCart },
   { to: '/produk', label: 'Informasi Produk', feature: 'products', icon: Package },
   { to: '/stok', label: 'Stok & Pengadaan', feature: 'stock', icon: Boxes },
@@ -19,7 +19,7 @@ const NAV: { to: string; label: string; feature: string; icon: LucideIcon; admin
   { to: '/tutup-kasir', label: 'Tutup Kasir', feature: 'daily_close', icon: Lock },
   { to: '/keuangan', label: 'Keuangan', feature: 'finance', icon: DollarSign },
   { to: '/pengguna', label: 'Pengguna & Role', feature: 'users', icon: ShieldCheck },
-  { to: '/format-nota', label: 'Format Nota', feature: 'settings', icon: FileText, adminOnly: true },
+  { to: '/format-nota', label: 'Format Nota', feature: 'format_nota', icon: FileText },
   { to: '/pengaturan', label: 'Pengaturan', feature: 'settings', icon: Settings },
 ]
 
@@ -39,7 +39,7 @@ export default function Layout() {
   // Urutan menu = pengaturan GLOBAL yang disimpan superadmin; menu baru/tersembunyi tetap ikut di belakang.
   const qc = useQueryClient()
   const { data: navOrder = [] } = useQuery({ queryKey: ['nav-order'], queryFn: getNavOrder, staleTime: 5 * 60_000 })
-  const navItems = NAV.filter((n) => can(n.feature, 'r') && (!n.adminOnly || isSuperadmin)
+  const navItems = NAV.filter((n) => can(n.feature, 'r')
       // Tutup kasir hanya untuk role kasir: lainnya memakai kolom & pemberitahuan di Rekap Penjualan
       && !(n.feature === 'daily_close' && !isKasir)).map(({ to, label, icon }) => ({ to, label, icon }))
   const items = orderNav(navItems, navOrder)

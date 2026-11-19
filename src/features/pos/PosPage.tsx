@@ -46,9 +46,10 @@ export default function PosPage() {
   const { autoPrint, thermalOnly, usbDirect } = usePrintPrefs()
   const aliveRef = useRef(false) // false saat halaman ditinggalkan: cegah cetak susulan di halaman lain
   const printGuard = useRef(createPrintGuard())
-  const receiptCfg = useReceiptCfg(), invoiceCfg = useInvoiceCfg() // dimuat sejak halaman dibuka agar siap saat cetak
-  const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: listBranches })
   const { activeBranchId, allBranches, profile } = useAuth()
+  const cfgBranch = allBranches ? activeBranchId : profile?.branch_id ?? null // format nota milik cabang yang dipakai
+  const receiptCfg = useReceiptCfg(cfgBranch), invoiceCfg = useInvoiceCfg(cfgBranch) // dimuat sejak halaman dibuka agar siap saat cetak
+  const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: listBranches })
   const sellBranch = allBranches && activeBranchId && activeBranchId !== profile?.branch_id ? activeBranchId : undefined
   const searchRef = useRef<HTMLInputElement>(null)
   const scanning = useRef(false)

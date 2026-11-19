@@ -164,17 +164,21 @@ check('BATCH: cabang asal = tujuan ditolak', /sama/.test(await err(PENG, `select
 const o = await imp(PENG, 'PAULUS', [{ code: codes[40], qty: 77 }], 'set')
 check('impor mode "set": stok ditimpa jadi 77, selisih tercatat', o.updated === 1 && (await stockAt(codes[40], 'PAULUS')) === 77)
 
-// ---------- format cetak (admin) ----------
+// ---------- format cetak (per cabang) ----------
 const cfgJson = lit({ title: 'NOTA PENJUALAN', footerLines: ['Terima kasih'] })
 await as(SA, `select save_print_template('invoice', ${cfgJson})`)
-check('FORMAT NOTA: superadmin bisa menyimpan', (await as(KR.KRANGGAN, `select config->>'title' t from print_templates where kind='invoice'`))[0]?.t === 'NOTA PENJUALAN')
-check('FORMAT NOTA: kasir bisa MEMBACA (perlu untuk mencetak)', (await as(KR.KRANGGAN, `select count(*)::int n from print_templates`))[0].n === 1)
-check('FORMAT NOTA: kasir TIDAK bisa menyimpan', /forbidden/.test(await err(KR.KRANGGAN, `select save_print_template('receipt', ${cfgJson})`) ?? ''))
-check('FORMAT NOTA: kabag/pengadaan/keuangan TIDAK bisa menyimpan', (await seq([KABAG, PENG, KEU], (u) => err(u, `select save_print_template('receipt', ${cfgJson})`))).every((m) => /forbidden/.test(m ?? '')))
+check('FORMAT NOTA: superadmin bisa menyimpan format global', (await as(KR.KRANGGAN, `select config->>'title' t from print_templates where kind='invoice' and branch_id is null`))[0]?.t === 'NOTA PENJUALAN')
+check('FORMAT NOTA: kasir bisa MEMBACA (perlu untuk mencetak)', (await as(KR.KRANGGAN, `select count(*)::int n from print_templates`))[0].n >= 1)
+check('FORMAT NOTA: kasir bisa menyimpan format cabangnya sendiri', (await err(KR.KRANGGAN, `select save_print_template('receipt', ${cfgJson}, '${B.KRANGGAN}')`)) === null)
+check('FORMAT NOTA: kasir TIDAK bisa menyimpan cabang lain', /forbidden/.test(await err(KR.KRANGGAN, `select save_print_template('receipt', ${cfgJson}, '${B.PAULUS}')`) ?? ''))
+check('FORMAT NOTA: kabag/pengadaan/keuangan TIDAK bisa menyimpan', (await seq([KABAG, PENG, KEU], (u) => err(u, `select save_print_template('receipt', ${cfgJson}, '${B.KRANGGAN}')`))).every((m) => /forbidden/.test(m ?? '')))
 check('FORMAT NOTA: kasir tidak bisa menulis tabel langsung', !!(await err(KR.KRANGGAN, `insert into print_templates(kind, config) values ('receipt','{}')`)) && !!(await err(KR.KRANGGAN, `update print_templates set config='{}'`)))
-check('FORMAT NOTA: jenis tidak valid / bukan objek / terlalu besar ditolak', /tidak valid/.test(await err(SA, `select save_print_template('lain', ${cfgJson})`) ?? '') && /tidak valid/.test(await err(SA, `select save_print_template('receipt', '[1]'::jsonb)`) ?? '') && /terlalu besar/.test(await err(SA, `select save_print_template('receipt', ${lit({ x: 'a'.repeat(21000) })})`) ?? ''))
+check('FORMAT NOTA: superadmin bisa menyimpan format cabang lain', (await err(SA, `select save_print_template('receipt', ${cfgJson}, '${B.PAULUS}')`)) === null)
+check('FORMAT NOTA: jenis tidak valid / bukan objek / terlalu besar ditolak', /tidak valid/.test(await err(SA, `select save_print_template('lain', ${cfgJson})`) ?? '') && /tidak valid/.test(await err(SA, `select save_print_template('receipt', '[1]'::jsonb)`) ?? '') && /terlalu besar/.test(await err(SA, `select save_print_template('receipt', ${lit({ x: 'a'.repeat(41000) })})`) ?? ''))
+check('FORMAT NOTA: format cabang tersimpan terpisah dari global', (await q(`select count(*)::int n from print_templates where kind='receipt' and branch_id='${B.KRANGGAN}'`))[0].n === 1 && (await q(`select count(*)::int n from print_templates where kind='receipt' and branch_id is null`))[0].n === 0)
 await as(SA, `select save_print_template('invoice', ${lit({ title: 'NOTA V2' })})`)
-check('FORMAT NOTA: simpan ulang menimpa (satu baris per jenis)', (await q(`select count(*)::int n from print_templates where kind='invoice'`))[0].n === 1)
+check('FORMAT NOTA: simpan ulang menimpa (satu baris per jenis & cabang)', (await q(`select count(*)::int n from print_templates where kind='invoice' and branch_id is null`))[0].n === 1)
+check('FORMAT NOTA: sale_detail memuat branch_id', (await as(KR.KRANGGAN, `select sale_detail('${vs.sale_id}')->>'branch_id' b`))[0].b === B.KRANGGAN)
 
 // ---------- rekap penjualan ----------
 const rc = async (u, y, m, br, pg = 1, sz = 20) => (await as(u, `select sales_recap(${y},${m},${br ? `'${B[br]}'` : 'null'},${pg},${sz}) as r`))[0].r

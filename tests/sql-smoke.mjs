@@ -300,6 +300,27 @@ console.log('NOTIF: kasir tidak boleh menghapus                    :', await not
 console.log('NOTIF: superadmin menghapus                           :', await notifDel(5, nid), '| sisa:', (await q(`select count(*)::int n from notifications`))[0].n)
 console.log('NOTIF: tercatat di audit log                          :', (await q(`select count(*)::int n from audit_log where action like 'notification.%'`))[0].n >= 2)
 
+// ===== uji 026: format nota per cabang =====
+await run('026', sql('supabase/manual_migrations/026_print_templates_per_branch.sql'))
+await run('026 ulang (idempoten)', sql('supabase/manual_migrations/026_print_templates_per_branch.sql'))
+const pusatId = (await q(`select id from branches where code='PUSAT'`))[0].id
+const cab1Id = (await q(`select id from branches where code='CAB1'`))[0].id
+const printSave = async (n, kind, cfg, branch) => {
+  const c = `'${JSON.stringify(cfg).replace(/'/g, "''")}'::jsonb`
+  try { await as(n, `select save_print_template('${kind}', ${c}${branch ? `, '${branch}'` : ''})`); return 'OK' } catch (e) { return 'ERR: ' + e.message }
+}
+console.log('NOTA: fitur format_nota tersedia                       :', (await q(`select 1 from features where key='format_nota'`)).length === 1)
+console.log('NOTA: kasir punya hak format_nota                      :', (await as(1, `select has_perm('format_nota','u') as p`))[0].p)
+console.log('NOTA: kasir menyimpan format cabangnya                 :', await printSave(1, 'receipt', { headerLines: ['Toko Pusat'] }, pusatId))
+console.log('NOTA: kasir menolak menyimpan cabang lain              :', await printSave(1, 'receipt', { headerLines: ['X'] }, cab1Id))
+console.log('NOTA: kasir tanpa cabang = format cabangnya sendiri    :', (await q(`select count(*)::int n from print_templates where kind='receipt' and branch_id='${pusatId}'`))[0].n === 1)
+console.log('NOTA: superadmin menyimpan format global               :', await printSave(5, 'receipt', { headerLines: ['Global'] }))
+console.log('NOTA: superadmin menyimpan format cabang lain          :', await printSave(5, 'receipt', { headerLines: ['Cab1'] }, cab1Id))
+console.log('NOTA: tiap cabang punya baris sendiri                  :', (await q(`select count(*)::int n from print_templates where kind='receipt'`))[0].n === 3)
+console.log('NOTA: pengadaan tidak boleh mengubah                   :', await printSave(2, 'receipt', { headerLines: ['X'] }, pusatId))
+console.log('NOTA: kasir tidak bisa tulis tabel langsung            :', !!(await (async () => { try { await as(1, `insert into print_templates(kind,config) values ('invoice','{}')`); return false } catch { return true } })()))
+console.log('NOTA: tercatat di audit log                            :', (await q(`select count(*)::int n from audit_log where action='print_template.save'`))[0].n >= 3)
+
 // status migrasi (dipakai juga untuk panduan pemilik)
 console.log('STATUS:', JSON.stringify(await q(`
  select '002' as migrasi, exists(select 1 from information_schema.columns where table_name='products' and column_name='author') as sudah
@@ -317,4 +338,5 @@ console.log('STATUS:', JSON.stringify(await q(`
  union all select '022', to_regprocedure('public.member_set_active_period(uuid,date,date)') is not null
  union all select '023', to_regprocedure('public.import_products(jsonb,boolean)') is not null
  union all select '024', to_regprocedure('public.save_nav_order(jsonb)') is not null
- union all select '025', to_regprocedure('public.notification_save(text,text)') is not null`)))
+ union all select '025', to_regprocedure('public.notification_save(text,text)') is not null
+ union all select '026', exists(select 1 from information_schema.columns where table_name='print_templates' and column_name='branch_id')`)))

@@ -13,7 +13,7 @@ export const TABLES = [
   ['branches', ['id']], ['roles', ['id']], ['features', ['key']], ['role_permissions', ['role_id', 'feature_key']],
   ['profiles', ['id']], ['user_permissions', ['user_id', 'feature_key']], ['products', ['id']], ['product_costs', ['product_id']],
   ['product_price_history', ['id']], ['stock', ['branch_id', 'product_id']], ['stock_movements', ['id']], ['members', ['id']],
-  ['sales', ['id']], ['sale_items', ['id']], ['audit_log', ['id']], ['print_templates', ['kind']],
+  ['sales', ['id']], ['sale_items', ['id']], ['audit_log', ['id']], ['print_templates', ['kind', 'branch_id']],
   ['daily_closings', ['id']], ['app_settings', ['key']], ['notifications', ['id']],
 ]
 const PAGE = 1000

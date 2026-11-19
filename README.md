@@ -29,7 +29,7 @@ Fitur baru = folder baru + 1 baris di tabel `features` (SQL) + 1 route di `App.t
 Kolom Excel: A kode, B nama, O harga, AK pengarang; kolom lain tersimpan di `attributes` dan tampil sebagai card.
 
 ## Urutan migrasi database
-`schema.sql` → `manual_migrations/002_products_import.sql` → `003_costs_and_line_discount.sql` → `004_stock_views.sql` → `005_user_permissions.sql` → `006_email_domain.sql` → `007_revoke_sessions.sql` → `008_active_branch.sql` → `009_stock_tools.sql` → `010_print_templates.sql` → `011_sales_recap.sql` → `012_sales_export.sql` → `013_stock_move.sql` → `014_finance.sql` → `015_report_range.sql` → `016_branch_short_top_products.sql` → `017_sale_idempotency.sql`
+`schema.sql` → `manual_migrations/002_products_import.sql` → `003_costs_and_line_discount.sql` → `004_stock_views.sql` → `005_user_permissions.sql` → `006_email_domain.sql` → `007_revoke_sessions.sql` → `008_active_branch.sql` → `009_stock_tools.sql` → `010_print_templates.sql` → `011_sales_recap.sql` → `012_sales_export.sql` → `013_stock_move.sql` → `014_finance.sql` → `015_report_range.sql` → `016_branch_short_top_products.sql` → `017_sale_idempotency.sql` → `018_daily_close.sql` → `019_closing_status.sql` → `020_kasir_only_global_branch.sql` → `021_membership.sql` → `022_member_active_period.sql` → `023_import_products.sql` → `024_app_settings_nav_order.sql` → `025_notifications.sql` → `026_print_templates_per_branch.sql`
 (`schema.sql` hanya untuk database kosong; ada penjaganya, jangan dijalankan ulang setelah migrasi.)
 (003: harga beli dipindah ke tabel rahasia `product_costs`, dan diskon per produk).
 

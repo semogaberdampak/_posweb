@@ -13,7 +13,7 @@ export type Recap = {
 }
 export type SaleDetail = {
   id: string; invoice_no: string; created_at: string; status: 'completed' | 'void'; void_reason: string | null
-  branch_name: string; cashier_name: string; payment_method: Method; subtotal: number; discount_amount: number; total: number
+  branch_id: string; branch_name: string; cashier_name: string; payment_method: Method; subtotal: number; discount_amount: number; total: number
   cash_received: number | null; change_amount: number | null; member_label: string | null
   items: { code: string; name: string; unit_price: number; qty: number; discount_pct: number; discount_amount: number; line_total: number }[]
 }

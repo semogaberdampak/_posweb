@@ -31,7 +31,7 @@ export default function App() {
           <Route path="/tutup-kasir" element={<RequireKasir><DailyClosePage /></RequireKasir>} />
           <Route path="/keuangan" element={<RequirePerm feature="finance"><FinancePage /></RequirePerm>} />
           <Route path="/pengguna" element={<RequirePerm feature="users"><UsersPage /></RequirePerm>} />
-          <Route path="/format-nota" element={<RequirePerm feature="settings"><FormatNotaPage /></RequirePerm>} />
+          <Route path="/format-nota" element={<RequirePerm feature="format_nota"><FormatNotaPage /></RequirePerm>} />
           <Route path="/pengaturan" element={<RequirePerm feature="settings"><SettingsPage /></RequirePerm>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -5,6 +5,7 @@ import { PrintSheet } from '../print/views'
 import { triggerPrint, usePrintPrefs } from '../print/printing'
 import { SAMPLE, useInvoiceCfg, useReceiptCfg } from '../print/templates'
 import { deviceLabel, pairedPrinter, pairUsbPrinter, printDirect, usbSupported } from '../../lib/webusb-printer'
+import { useAuth } from '../auth/AuthProvider'
 
 function ChangePassword() {
   const [a, setA] = useState(''); const [b, setB] = useState('')
@@ -30,9 +31,9 @@ function ChangePassword() {
   )
 }
 
-function PrinterSettings({ onTest }: { onTest: () => void }) {
+function PrinterSettings({ onTest, branchId }: { onTest: () => void; branchId: string | null }) {
   const { autoPrint, thermalOnly, usbDirect, changeAuto, changeThermalOnly, changeUsbDirect } = usePrintPrefs()
-  const receipt = useReceiptCfg()
+  const receipt = useReceiptCfg(branchId)
   const [usbName, setUsbName] = useState(''); const [usbMsg, setUsbMsg] = useState('')
   useEffect(() => { pairedPrinter().then((d) => setUsbName(d ? deviceLabel(d) : '')).catch(() => setUsbName('')) }, [])
   async function pair() { const r = await pairUsbPrinter(); if (r.device) { setUsbName(deviceLabel(r.device)); setUsbMsg('Printer dihubungkan.') } else setUsbMsg(r.reason ?? '') }
@@ -67,13 +68,15 @@ function PrinterSettings({ onTest }: { onTest: () => void }) {
 
 export default function SettingsPage() {
   const { theme, toggle } = useTheme()
-  const receipt = useReceiptCfg(), invoice = useInvoiceCfg()
+  const { allBranches, activeBranchId, profile } = useAuth()
+  const cfgBranch = allBranches ? activeBranchId : profile?.branch_id ?? null // struk contoh memakai format cabang ini
+  const receipt = useReceiptCfg(cfgBranch), invoice = useInvoiceCfg(cfgBranch)
   const [testing, setTesting] = useState(false)
   const test = () => { setTesting(true); triggerPrint() }
   return (
     <>
-    <div className="max-w-xl space-y-6 p-6 print:hidden">
-      <h1 className="text-2xl font-semibold">Pengaturan</h1>
+    <div className="mx-auto w-full max-w-xl space-y-6 p-6 print:hidden">
+      <h1 className="text-center text-2xl font-semibold">Pengaturan</h1>
       <div className="flex items-center justify-between rounded-2xl bg-bg-light p-4 shadow">
         <div>
           <div className="font-medium">Tema tampilan</div>
@@ -81,7 +84,7 @@ export default function SettingsPage() {
         </div>
         <button className="btn-primary" onClick={toggle}>Ganti ke {theme === 'dark' ? 'Terang' : 'Gelap'}</button>
       </div>
-      <PrinterSettings onTest={test} />
+      <PrinterSettings onTest={test} branchId={cfgBranch} />
       <ChangePassword />
     </div>
     {testing && <PrintSheet kind="receipt" data={SAMPLE} receipt={receipt} invoice={invoice} />}
