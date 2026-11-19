@@ -321,6 +321,42 @@ console.log('NOTA: pengadaan tidak boleh mengubah                   :', await pr
 console.log('NOTA: kasir tidak bisa tulis tabel langsung            :', !!(await (async () => { try { await as(1, `insert into print_templates(kind,config) values ('invoice','{}')`); return false } catch { return true } })()))
 console.log('NOTA: tercatat di audit log                            :', (await q(`select count(*)::int n from audit_log where action='print_template.save'`))[0].n >= 3)
 
+// ===== uji 027: member toko KBS =====
+await run('027', sql('supabase/manual_migrations/027_store_member_kbs.sql'))
+await run('027 ulang (idempoten)', sql('supabase/manual_migrations/027_store_member_kbs.sql'))
+await run('028', sql('supabase/manual_migrations/028_kbs_receipt_name_only.sql'))
+await run('028 ulang (idempoten)', sql('supabase/manual_migrations/028_kbs_receipt_name_only.sql'))
+const kbsImport = async (n, rows) => {
+  const j = `'${JSON.stringify(rows).replace(/'/g, "''")}'::jsonb`
+  try { return JSON.stringify((await as(n, `select import_kbs_members(${j}) as r`))[0].r) } catch (e) { return 'ERR: ' + e.message }
+}
+console.log('KBS: kasir tidak boleh mengimpor data             :', await kbsImport(1, [{ code: 'K1', name: 'Toko' }]))
+console.log('KBS: superadmin mengimpor data                    :', await kbsImport(5, [{ code: 'k1', name: 'Toko Pusat KBS' }, { code: 'K2', name: 'Toko Cabang KBS' }]))
+console.log('KBS: kode disimpan kapital                        :', (await q(`select code, name from kbs_members order by code`)).map((x) => x.code).join(','))
+console.log('KBS: kasir mencari kode (maks. 20)                :', JSON.stringify(await as(1, `select * from kbs_member_search('K')`)))
+
+const smSave = async (n, enabled, code, branch) => { const c = code ? `'${code}'` : 'null'; try { await as(n, `select store_member_save('${branch}', ${enabled}, ${c})`); return 'OK' } catch (e) { return 'ERR: ' + e.message } }
+console.log('MEMBER TOKO: kasir menyalakan cabangnya           :', await smSave(1, true, 'K1', pusatId))
+console.log('MEMBER TOKO: kasir cabang lain ditolak            :', await smSave(1, true, 'K2', cab1Id))
+console.log('MEMBER TOKO: kode tidak dikenal ditolak           :', await smSave(1, true, 'ZZZ', pusatId))
+console.log('MEMBER TOKO: pengadaan tidak boleh mengatur       :', await smSave(2, true, 'K1', pusatId))
+console.log('MEMBER TOKO: superadmin mengatur cabang lain      :', await smSave(5, true, 'K2', cab1Id))
+console.log('MEMBER TOKO: kasir membaca pengaturan cabangnya   :', JSON.stringify((await as(1, `select store_member_get('${pusatId}') as v`))[0].v))
+
+await q(`update stock set qty = qty + 5 where branch_id = '${pusatId}' and product_id = '${A}'`)
+const smSale = async (arr, member) => {
+  try { return (await as(1, `select create_sale('${items(arr)}'::jsonb, ${member === null ? 'null' : `'${member}'`}, 'qris', null, null, null) as r`))[0].r }
+  catch (e) { return 'ERR: ' + e.message }
+}
+const smNo = await smSale([{ product_id: A, qty: 1, discount_pct: 0 }], null)
+console.log('MEMBER TOKO: nota hanya NAMA toko (tanpa kode)    :', smNo.member === 'Toko Pusat KBS' ? 'OK' : 'SALAH: ' + smNo.member)
+console.log('MEMBER TOKO: tersimpan di baris transaksi         :', (await q(`select member_label from sales where id = '${smNo.sale_id}'`))[0]?.member_label === 'Toko Pusat KBS' ? 'OK' : 'SALAH')
+console.log('MEMBER TOKO: member asli tetap NOMOR - Nama       :', (await smSale([{ product_id: A, qty: 1, discount_pct: 0 }], 'M-100')).member === 'M-100 - Budi Baru' ? 'OK' : 'SALAH')
+console.log('MEMBER TOKO: diskon tetap wajib member asli       :', (await smSale([{ product_id: A, qty: 1, discount_pct: 5 }], null)).slice?.(0, 60))
+await smSave(1, false, null, pusatId)
+console.log('MEMBER TOKO: dimatikan -> transaksi tanpa member  :', (await smSale([{ product_id: A, qty: 1, discount_pct: 0 }], null)).member)
+console.log('MEMBER TOKO: tercatat di audit log                :', (await q(`select count(*)::int n from audit_log where action in ('kbs_member.import','settings.store_member')`))[0].n >= 3)
+
 // status migrasi (dipakai juga untuk panduan pemilik)
 console.log('STATUS:', JSON.stringify(await q(`
  select '002' as migrasi, exists(select 1 from information_schema.columns where table_name='products' and column_name='author') as sudah
@@ -339,4 +375,6 @@ console.log('STATUS:', JSON.stringify(await q(`
  union all select '023', to_regprocedure('public.import_products(jsonb,boolean)') is not null
  union all select '024', to_regprocedure('public.save_nav_order(jsonb)') is not null
  union all select '025', to_regprocedure('public.notification_save(text,text)') is not null
- union all select '026', exists(select 1 from information_schema.columns where table_name='print_templates' and column_name='branch_id')`)))
+ union all select '026', exists(select 1 from information_schema.columns where table_name='print_templates' and column_name='branch_id')
+ union all select '027', to_regprocedure('public.store_member_save(uuid,boolean,text)') is not null
+ union all select '028', pg_get_functiondef(to_regprocedure('public.create_sale(jsonb,text,payment_method,numeric,uuid,uuid)')::oid) like '%v_member_label := v_sm_name;%'`)))

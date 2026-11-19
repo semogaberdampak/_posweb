@@ -66,6 +66,97 @@ function PrinterSettings({ onTest, branchId }: { onTest: () => void; branchId: s
   )
 }
 
+type StoreMemberCfg = { enabled?: boolean; code?: string | null; name?: string | null }
+type KbsRow = { code: string; name: string }
+
+function StoreMemberSettings({ branchId }: { branchId: string | null }) {
+  const [enabled, setEnabled] = useState(false)
+  const [code, setCode] = useState(''); const [name, setName] = useState('')
+  const [q, setQ] = useState(''); const [rows, setRows] = useState<KbsRow[] | null>(null)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    setMsg(null); setRows(null)
+    if (!branchId) { setEnabled(false); setCode(''); setName(''); return }
+    supabase.rpc('store_member_get', { p_branch: branchId }).then(({ data, error }) => {
+      if (!alive) return
+      if (error) { setMsg({ ok: false, text: 'Gagal memuat pengaturan member toko.' }); return }
+      const v = (data ?? {}) as StoreMemberCfg
+      setEnabled(!!v.enabled); setCode(v.code ?? ''); setName(v.name ?? '')
+    })
+    return () => { alive = false }
+  }, [branchId])
+
+  async function search() {
+    setBusy(true); setMsg(null)
+    const { data, error } = await supabase.rpc('kbs_member_search', { p_query: q.trim() })
+    setBusy(false)
+    if (error) { setRows(null); setMsg({ ok: false, text: 'Gagal mencari data member toko.' }); return }
+    setRows((data ?? []) as KbsRow[])
+  }
+
+  async function save() {
+    if (!branchId) return
+    if (enabled && !code) { setMsg({ ok: false, text: 'Pilih kode member toko dulu, atau hilangkan centang.' }); return }
+    setBusy(true); setMsg(null)
+    const { error } = await supabase.rpc('store_member_save', { p_branch: branchId, p_enabled: enabled, p_code: enabled ? code : null })
+    setBusy(false)
+    if (error) { setMsg({ ok: false, text: `Gagal menyimpan: ${error.message}` }); return }
+    setMsg({ ok: true, text: enabled ? `Member toko dipakai untuk transaksi tanpa diskon (${code}${name ? ` — ${name}` : ''}).` : 'Member toko dimatikan untuk cabang ini.' })
+  }
+
+  return (
+    <div className="space-y-3 rounded-2xl bg-bg-light p-4 shadow">
+      <div className="font-medium">Member toko (KBS)</div>
+      <p className="text-sm text-text-muted">
+        Bila dinyalakan, transaksi <b>tanpa diskon</b> otomatis memakai kode & nama toko ini pada struk
+        (kolom pelanggan). Transaksi berdiskon tetap wajib memakai member TAKOM yang terdaftar.
+      </p>
+      {!branchId ? (
+        <p className="text-sm text-warning">Pilih cabang aktif di header dulu.</p>
+      ) : (
+        <>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+            <span>Gunakan member toko</span>
+          </label>
+          {enabled && (
+            <div className="space-y-2 rounded-2xl border border-border-muted p-3">
+              <div className="text-sm">
+                {code ? <>Kode: <b>{code}</b>{name && <> — {name}</>}</> : <span className="text-text-muted">Belum memilih kode member toko.</span>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <input className="input min-w-0 flex-1" placeholder="Cari kode / nama toko KBS" value={q} maxLength={60}
+                  onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void search() } }} />
+                <button type="button" className="btn-ghost" disabled={busy} onClick={() => void search()}>Cari</button>
+              </div>
+              {rows && rows.length === 0 && (
+                <p className="text-sm text-text-muted">Tidak ada data member toko. Superadmin perlu mengimpor data KBS terlebih dahulu.</p>
+              )}
+              {rows && rows.length > 0 && (
+                <div className="space-y-1">
+                  {rows.map((r) => (
+                    <button type="button" key={r.code} className="btn-ghost w-full text-left"
+                      onClick={() => { setCode(r.code); setName(r.name); setRows(null); setQ('') }}>
+                      <b>{r.code}</b> — {r.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <button type="button" className="btn-primary" disabled={busy} onClick={() => void save()}>
+            {busy ? 'Menyimpan…' : 'Simpan pengaturan member toko'}
+          </button>
+          {msg && <p role="status" className={`text-sm ${msg.ok ? 'text-success' : 'text-danger'}`}>{msg.text}</p>}
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const { theme, toggle } = useTheme()
   const { allBranches, activeBranchId, profile } = useAuth()
@@ -84,6 +175,9 @@ export default function SettingsPage() {
         </div>
         <button className="btn-primary" onClick={toggle}>Ganti ke {theme === 'dark' ? 'Terang' : 'Gelap'}</button>
       </div>
+      {(profile?.role_name === 'kasir' || profile?.role_name === 'superadmin') && (
+        <StoreMemberSettings branchId={cfgBranch} />
+      )}
       <PrinterSettings onTest={test} branchId={cfgBranch} />
       <ChangePassword />
     </div>
